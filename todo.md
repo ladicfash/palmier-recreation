@@ -40,7 +40,7 @@
 - [x] Test on multiple browsers
 - [x] Performance optimization (stable object URLs, memoized callbacks)
 
-## Future Enhancements
+## Future Enhancements (Deferred - out of current sprint scope)
 - [ ] AI video generation (Kling integration)
 - [ ] Advanced effects library
 - [ ] Collaboration features
@@ -114,3 +114,40 @@
 - [x] Fix: Color grading live preview - gradeToCSS() now applied to video element (combined with effects)
 - [x] Fix: PySceneDetect confidence scores - replaced hardcoded 1.0 with bell-curve heuristic
 - [x] Fix: Advanced scene detection - deduplication by merging with existing scenes on detect
+
+## Phase 12: Smart Cut (Scene Importance Scoring)
+- [x] Implement motion detection (frame-to-frame pixel changes via OpenCV)
+- [x] Implement audio analysis (RMS energy via librosa)
+- [x] Implement scene importance scoring (motion 30% + audio 20% + duration 25% + temporal 25%)
+- [x] Build Smart Cut UI (preset durations 30s/1:00/1:30/2:00 + custom input)
+- [x] Implement auto-clip generation (top N scenes by score, preserve temporal order)
+- [x] Add Smart Cut to AI panel
+- [x] Fix: unique temp audio files with cleanup (mkstemp + ffmpeg -y)
+- [x] Fix: time-aligned motion/audio scoring (real timestamps, windowed averages)
+- [x] Fix: real scene boundaries (start/end/duration) used for clip selection
+- [x] Add server/requirements.txt for Python dependencies
+- [x] End-to-end test (test_scene_importance.py) - ALL TESTS PASSED
+
+## Phase 13: Multi-Layer Editing (After Effects-style)
+- [ ] Design and implement Layer data model (type, transforms, blending, effects)
+- [ ] Build Layer panel UI (add/delete/reorder layers, visibility toggle)
+- [ ] Implement layer transforms UI (scale, rotation, position, opacity sliders)
+- [ ] Implement layer blending modes (normal, multiply, screen, overlay, etc.)
+- [ ] Build canvas preview (render all layers to canvas in z-order)
+- [ ] Implement layer effects (apply effects per-layer, not just global)
+- [ ] Add layer keyframes (future: animation support)
+
+## Phase 14: Eleven Labs Voice Generation
+- [ ] Add ELEVENLABS_API_KEY to secrets
+- [ ] Implement voice generation endpoint (tRPC)
+- [ ] Build voice generation UI (text input, voice selector, generate button)
+- [ ] Add generated audio to timeline as audio layer
+- [ ] Test voice quality and latency
+
+## Phase 15: Runway Video Generation (Alternative to Kling)
+- [ ] Add RUNWAY_API_KEY to secrets
+- [ ] Implement video generation endpoint (tRPC - async with polling)
+- [ ] Build video generation UI (prompt input, duration, generate button)
+- [ ] Add generated video to timeline as video layer
+- [ ] Handle async generation (show progress, poll for completion)
+- [ ] Test video quality and generation time

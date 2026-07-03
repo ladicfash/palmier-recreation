@@ -560,6 +560,61 @@ export default function Editor() {
     }
   }, [projectVideoUrl, projectDbId, advancedMethod, detectAdvancedMutation, pushHistory, captureSnapshot]);
 
+  // ─── Smart Cut (Scene Importance Scoring + Auto-Clip Generation) ──────────
+  const [isSmartCutting, setIsSmartCutting] = useState(false);
+  const [smartCutTarget, setSmartCutTarget] = useState(90); // seconds, default 1:30
+  const smartCutMutation = trpc.sceneDetection.smartCut.useMutation();
+
+  const runSmartCut = useCallback(async () => {
+    if (!projectVideoUrl) { toast.error("Save your project first (uploads video for analysis)"); return; }
+    if (!projectDbId) { toast.error("Save your project first"); return; }
+    if (scenes.length === 0) { toast.error("Detect scenes first (use Detect Scenes or PySceneDetect)"); return; }
+    setIsSmartCutting(true);
+    const toastId = toast.loading(`Analyzing ${scenes.length} scenes for importance (motion + audio + pacing)...`);
+    try {
+      const result = await smartCutMutation.mutateAsync({
+        projectId: projectDbId,
+        videoUrl: projectVideoUrl,
+        targetDuration: smartCutTarget,
+        scenes: scenes.map(s => ({ id: s.id, timestamp: s.timestamp / 1000, confidence: s.confidence })),
+      });
+      if (result.selectedClips && result.selectedClips.length > 0) {
+        pushHistory(captureSnapshot());
+        // Create timeline clips from real scene boundaries returned by backend
+        const newClips: TimelineClip[] = result.selectedClips.map((clip: any, i: number) => {
+          const start = Math.max(0, clip.clip_start ?? clip.timestamp ?? 0);
+          const end = Math.min(duration || Infinity, clip.clip_end ?? start + 3);
+          return {
+            id: `smartcut-${Date.now()}-${i}`,
+            name: `Smart Cut ${i + 1} (score: ${Math.round(clip.importance_score ?? 0)})`,
+            startTime: start,
+            endTime: Math.max(end, start + 0.5),
+            type: "video" as const,
+            opacity: 1,
+            speed: 1,
+          };
+        });
+        setClips(prev => [...prev, ...newClips]);
+        // Persist clips to DB
+        for (const c of newClips) {
+          saveClipMutation.mutate({ projectId: projectDbId, name: c.name,
+            startTime: Math.floor(c.startTime * 1000), endTime: Math.floor(c.endTime * 1000), type: "video" });
+        }
+        toast.dismiss(toastId);
+        const totalDur = newClips.reduce((sum, c) => sum + (c.endTime - c.startTime), 0);
+        toast.success(`Smart Cut: ${newClips.length} clips selected (~${formatTime(totalDur)} total). Use Export → Clips to render.`);
+      } else {
+        toast.dismiss(toastId);
+        toast.info("No clips could be selected. Try a longer target duration.");
+      }
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("Smart Cut failed: " + (err as Error).message);
+    } finally {
+      setIsSmartCutting(false);
+    }
+  }, [projectVideoUrl, projectDbId, scenes, smartCutTarget, duration, smartCutMutation, saveClipMutation, pushHistory, captureSnapshot]);
+
   // ─── Scene Detection ───────────────────────────────────────────────────────
   const detectScenes = useCallback(async () => {
     if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
@@ -1222,6 +1277,26 @@ export default function Editor() {
                   <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={detectScenesAdvanced} disabled={!projectVideoUrl || isDetectingAdvanced}>
                     {isDetectingAdvanced ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Detecting...</> : <><Zap className="w-3.5 h-3.5" /> PySceneDetect</>}
                   </Button>
+                  {!projectVideoUrl && videoObjectUrl && <p className="text-xs text-yellow-500 mt-1">Save project first to enable.</p>}
+                </div>
+
+                <div className="border-t border-border pt-4">
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Smart Cut (AI Ad Maker)</label>
+                  <p className="text-xs text-muted-foreground mb-2">Analyzes motion, audio & pacing to auto-select the best scenes for your target duration. Detect scenes first.</p>
+                  <div className="flex gap-1.5 mb-2">
+                    {([30, 60, 90, 120] as const).map(sec => (
+                      <button key={sec} onClick={() => setSmartCutTarget(sec)} className={`flex-1 px-1.5 py-1 rounded text-[10px] transition-colors ${smartCutTarget === sec ? "bg-accent text-accent-foreground" : "bg-background hover:bg-accent/20 text-muted-foreground border border-border"}`}>{sec >= 60 ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}` : `${sec}s`}</button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">Custom:</span>
+                    <input type="number" min={10} max={600} value={smartCutTarget} onChange={e => setSmartCutTarget(Math.max(10, Math.min(600, Number(e.target.value) || 90)))} className="flex-1 h-7 px-2 rounded bg-background border border-border text-xs" />
+                    <span className="text-[10px] text-muted-foreground">sec</span>
+                  </div>
+                  <Button size="sm" variant="default" className="w-full h-8 text-xs gap-1.5" onClick={runSmartCut} disabled={!projectVideoUrl || isSmartCutting || scenes.length === 0}>
+                    {isSmartCutting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing...</> : <><Scissors className="w-3.5 h-3.5" /> Smart Cut to {smartCutTarget >= 60 ? `${Math.floor(smartCutTarget / 60)}:${String(smartCutTarget % 60).padStart(2, "0")}` : `${smartCutTarget}s`}</>}
+                  </Button>
+                  {scenes.length === 0 && videoObjectUrl && <p className="text-xs text-yellow-500 mt-1">Run scene detection first.</p>}
                   {!projectVideoUrl && videoObjectUrl && <p className="text-xs text-yellow-500 mt-1">Save project first to enable.</p>}
                 </div>
 

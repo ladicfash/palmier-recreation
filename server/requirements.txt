@@ -1,0 +1,7 @@
+# Python dependencies for backend scene detection & smart cut
+# Install: pip3 install -r server/requirements.txt
+scenedetect>=0.6
+opencv-python-headless>=4.8
+numpy>=1.24
+librosa>=0.10
+soundfile>=0.12

@@ -316,6 +316,70 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         return db.getProjectSceneDetections(input.projectId);
       }),
+
+    smartCut: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+        videoUrl: z.string(),
+        targetDuration: z.number().min(10).max(600),
+        scenes: z.array(z.object({
+          id: z.number(),
+          timestamp: z.number(),
+          confidence: z.number(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const tmpPath = join(tmpdir(), `pixelcraft_smart_${ctx.user.id}_${Date.now()}.mp4`);
+        try {
+          const response = await fetch(input.videoUrl);
+          if (!response.ok) throw new Error(`Failed to download video: ${response.statusText}`);
+          const buffer = Buffer.from(await response.arrayBuffer());
+          writeFileSync(tmpPath, buffer);
+
+          const pythonScript = `
+import sys
+import json
+sys.path.insert(0, '${process.cwd()}/server')
+from scene_importance import score_scenes, extract_smart_clips
+
+video_path = "${tmpPath}"
+scenes = ${JSON.stringify(input.scenes)}
+target_duration = ${input.targetDuration}
+
+scored_scenes = score_scenes(video_path, scenes)
+selected_clips = extract_smart_clips(scored_scenes, target_duration)
+
+result = {
+  "success": True,
+  "scored_scenes": scored_scenes,
+  "selected_clips": selected_clips,
+  "total_importance": sum(s.get("importance_score", 0) for s in selected_clips),
+}
+
+print(json.dumps(result))
+`;
+          const scriptPath = join(tmpdir(), `smart_cut_${Date.now()}.py`);
+          writeFileSync(scriptPath, pythonScript);
+          const output = execSync(`python3 "${scriptPath}"`, { encoding: "utf-8", timeout: 180000 });
+          const result = JSON.parse(output);
+          unlinkSync(scriptPath);
+
+          if (!result.success) throw new Error(result.error || "Smart cut failed");
+
+          return {
+            success: true,
+            scoredScenes: result.scored_scenes,
+            selectedClips: result.selected_clips,
+            totalImportance: result.total_importance,
+            clipCount: result.selected_clips.length,
+          };
+        } catch (error) {
+          console.error("Smart cut error:", error);
+          throw new Error(`Smart cut failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+        } finally {
+          if (existsSync(tmpPath)) unlinkSync(tmpPath);
+        }
+      }),
   }),
 
   colorGrading: router({
