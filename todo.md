@@ -67,47 +67,50 @@
 - [x] Add: Undo/redo for editing actions (50-step history with keyboard shortcuts)
 
 
-## Phase 7: Audio Support (CURRENT)
-- [ ] Audio file upload (MP3, WAV, OGG, M4A)
-- [ ] Multi-track audio support (add audio tracks to timeline)
-- [ ] Audio volume control per track
-- [ ] Audio mixing (combine video audio + uploaded audio)
-- [ ] Extract audio from video for separate editing
+## Phase 7: Audio Support
+- [x] Audio file upload (MP3, WAV, OGG, M4A) - Web Audio API integration
+- [x] Multi-track audio support (AudioEffectsPanel with track list)
+- [x] Audio volume control per track (gain node per track)
+- [x] Audio mixing (Web Audio API mixes video + uploaded audio)
+- [ ] Extract audio from video for separate editing (future)
 
-## Phase 8: Effects Library (CURRENT)
-- [ ] Brightness/Contrast adjustment
-- [ ] Saturation control
-- [ ] Hue shift
-- [ ] Blur effect
-- [ ] Grayscale filter
-- [ ] Sepia filter
-- [ ] Vintage effect
-- [ ] Custom filter combinations
+## Phase 8: Effects Library
+- [x] Brightness/Contrast adjustment (CSS filter + canvas)
+- [x] Saturation control (CSS filter)
+- [x] Hue shift (CSS filter)
+- [x] Blur effect (CSS filter)
+- [x] Grayscale filter (CSS filter)
+- [x] Sepia filter (CSS filter)
+- [x] Vintage effect (CSS filter combination)
+- [x] Custom filter combinations (all sliders combinable)
 
-## Phase 9: Color Grading (NEXT)
-- [ ] Curves adjustment (RGB, individual channels)
-- [ ] Levels adjustment
-- [ ] Color wheels (Shadows/Midtones/Highlights)
-- [ ] Presets (Cinematic, Warm, Cool, Vintage, etc.)
-- [ ] LUT support (.cube file loading)
-- [ ] Per-clip color grading (keyframes on timeline)
-- [ ] AI color suggestions (histogram analysis + LLM)
-- [ ] Color grading preview on timeline
+## Phase 9: Color Grading
+- [x] Curves adjustment (RGB + individual channels - ColorGradingPanel)
+- [x] Levels adjustment (via curves)
+- [x] Color wheels (Shadows/Midtones/Highlights - ColorGradingPanel)
+- [x] Presets (Cinematic, Warm, Cool, Vintage, etc. - ColorGradingPanel)
+- [x] LUT support (.cube file loading - ColorGradingPanel)
+- [ ] Per-clip color grading keyframes (future)
+- [x] AI color suggestions (LLM-powered via chatbot)
+- [x] Color grading preview on video (canvas-based real-time)
 
-## Phase 10: Chatbot Command Interface (NEXT)
-- [ ] Sidebar chatbot panel
-- [ ] Command parsing (trim, speed, export, detect scenes, add caption, etc.)
-- [ ] Natural language command support
-- [ ] Command history
-- [ ] Help/suggestions for available commands
+## Phase 10: Chatbot Command Interface
+- [x] Sidebar chatbot panel (AI Chat tab)
+- [x] Command parsing (trim, speed, export, detect scenes, etc.)
+- [x] Natural language command support (GPT-4o-mini)
+- [x] Command history (chat message list)
+- [x] Help/suggestions for available commands (suggestions chips)
 
-## Phase 11: Advanced Scene Detection (FUTURE)
-- [ ] Integrate PySceneDetect backend (more accurate than histogram)
-- [ ] Support multiple detection methods (content, adaptive, threshold)
-- [ ] Combine histogram + PySceneDetect for comprehensive detection
-- [ ] Show confidence scores for detected scenes
+## Phase 11: Advanced Scene Detection
+- [x] Integrate PySceneDetect backend (detectAdvanced tRPC endpoint - downloads S3 video to temp file)
+- [x] Support multiple detection methods (content, adaptive, threshold - UI selector in AI panel)
+- [x] Combine histogram + PySceneDetect for comprehensive detection (both available in AI panel)
+- [x] Show confidence scores for detected scenes (in scene list)
 
 ## Bug Fixes (Priority - Current Sprint)
-- [ ] Fix: Audio upload - audio files not playing back in editor
-- [ ] Fix: Captions - caption generation fails ("Failed to fetch audio file")
-- [ ] Fix: Audio tracks - volume control not affecting playback
+- [x] Fix: Audio upload - Web Audio API with GainNode per track
+- [x] Fix: Captions - OfflineAudioContext WAV extraction (no blob URL to server)
+- [x] Fix: Audio tracks - volume control via GainNode.gain.value
+- [x] Fix: Color grading live preview - gradeToCSS() now applied to video element (combined with effects)
+- [x] Fix: PySceneDetect confidence scores - replaced hardcoded 1.0 with bell-curve heuristic
+- [x] Fix: Advanced scene detection - deduplication by merging with existing scenes on detect

@@ -5,8 +5,8 @@ import { TimelineEditor } from "@/components/TimelineEditor";
 import { ExportDialog } from "@/components/ExportDialog";
 import { AudioEffectsPanel } from "@/components/AudioEffectsPanel";
 import { ColorGradingPanel } from "@/components/ColorGradingPanel";
-import { EffectSettings, DEFAULT_EFFECTS } from "@/lib/videoEffects";
-import { ColorGrade, DEFAULT_GRADE } from "@/components/ColorGradingPanel";
+import { EffectSettings, DEFAULT_EFFECTS, getEffectsCSSFilter } from "@/lib/videoEffects";
+import { ColorGrade, DEFAULT_GRADE, gradeToCSS } from "@/components/ColorGradingPanel";
 import {
   Upload, Play, Pause, Volume2, VolumeX, Download,
   Save, FolderOpen, Scissors, Type,
@@ -149,6 +149,7 @@ export default function Editor() {
   // Project
   const [projectName, setProjectName] = useState("Untitled Project");
   const [projectDbId, setProjectDbId] = useState<number | null>(null);
+  const [projectVideoUrl, setProjectVideoUrl] = useState<string | null>(null); // S3 URL after save
   const [clips, setClips] = useState<TimelineClip[]>([]);
   const [scenes, setScenes] = useState<SceneMarker[]>([]);
   const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
@@ -213,6 +214,7 @@ export default function Editor() {
   const uploadAudioMutation = trpc.videos.uploadAudio.useMutation();
   const generateCaptionsMutation = trpc.captions.generate.useMutation();
   const chatbotMutation = trpc.chatbot.command.useMutation();
+  const detectAdvancedMutation = trpc.sceneDetection.detectAdvanced.useMutation();
   const { data: projectList } = trpc.projects.list.useQuery();
 
   // ─── Web Audio API Setup ───────────────────────────────────────────────────
@@ -512,6 +514,52 @@ export default function Editor() {
     }
   }, [isPlaying, audioTracks]);
 
+  // ─── Advanced Scene Detection (PySceneDetect backend) ─────────────────────
+  const [isDetectingAdvanced, setIsDetectingAdvanced] = useState(false);
+  const [advancedMethod, setAdvancedMethod] = useState<"content" | "adaptive" | "threshold">("content");
+
+  const detectScenesAdvanced = useCallback(async () => {
+    if (!projectVideoUrl) { toast.error("Save your project first to enable advanced detection"); return; }
+    if (!projectDbId) { toast.error("Save your project first"); return; }
+    setIsDetectingAdvanced(true);
+    const toastId = toast.loading(`Running PySceneDetect (${advancedMethod})...`);
+    try {
+      const result = await detectAdvancedMutation.mutateAsync({
+        projectId: projectDbId,
+        videoUrl: projectVideoUrl,
+        threshold: 27.0,
+        method: advancedMethod,
+      });
+      if (result.scenes && result.scenes.length > 0) {
+        pushHistory(captureSnapshot());
+        const newScenes = result.scenes.map((s: any, i: number) => ({
+          id: i,
+          timestamp: Math.round((s.timestamp ?? 0) * 1000),
+          confidence: s.confidence ?? 1.0,
+        }));
+        // Merge with existing scenes, deduplicating within 500ms window
+        setScenes(prev => {
+          const merged = [...prev];
+          for (const ns of newScenes) {
+            const isDuplicate = merged.some(existing => Math.abs(existing.timestamp - ns.timestamp) < 500);
+            if (!isDuplicate) merged.push({ ...ns, id: merged.length });
+          }
+          return merged.sort((a, b) => a.timestamp - b.timestamp).map((s, i) => ({ ...s, id: i }));
+        });
+        toast.dismiss(toastId);
+        toast.success(`PySceneDetect found ${result.sceneCount} scene${result.sceneCount !== 1 ? "s" : ""} (${result.method})!`);
+      } else {
+        toast.dismiss(toastId);
+        toast.info("No scene cuts detected. Try lowering the threshold.");
+      }
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("Advanced detection failed: " + (err as Error).message);
+    } finally {
+      setIsDetectingAdvanced(false);
+    }
+  }, [projectVideoUrl, projectDbId, advancedMethod, detectAdvancedMutation, pushHistory, captureSnapshot]);
+
   // ─── Scene Detection ───────────────────────────────────────────────────────
   const detectScenes = useCallback(async () => {
     if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
@@ -715,7 +763,8 @@ export default function Editor() {
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
-        await uploadVideoMutation.mutateAsync({ projectId: dbId, fileName: file.name, fileData: base64, mimeType: file.type || "video/mp4" });
+        const uploaded = await uploadVideoMutation.mutateAsync({ projectId: dbId, fileName: file.name, fileData: base64, mimeType: file.type || "video/mp4" });
+        if (uploaded?.url) setProjectVideoUrl(uploaded.url);
       }
       toast.dismiss(toastId); toast.success("Project saved!");
     } catch {
@@ -748,6 +797,7 @@ export default function Editor() {
           }
         } catch { toast.error("Could not restore video. Please re-upload."); }
       }
+      if (full.project.videoUrl) setProjectVideoUrl(full.project.videoUrl);
       setShowProjects(false); toast.dismiss(toastId); toast.success(`Loaded: ${full.project.name}`);
     } catch (err) {
       toast.dismiss(toastId); toast.error("Failed to load: " + (err as Error).message);
@@ -961,7 +1011,7 @@ export default function Editor() {
                   ref={videoRef}
                   src={videoObjectUrl}
                   className="max-w-full max-h-full object-contain"
-                  style={{ opacity, filter: `brightness(${1 + effects.brightness / 100}) contrast(${1 + effects.contrast / 100}) saturate(${1 + effects.saturation / 100}) hue-rotate(${effects.hue}deg) blur(${effects.blur}px) grayscale(${effects.grayscale / 100}) sepia(${effects.sepia / 100})` }}
+                  style={{ opacity, filter: (() => { const ef = getEffectsCSSFilter(effects); const cg = gradeToCSS(colorGrade); const parts = [ef === 'none' ? '' : ef, cg].filter(Boolean); return parts.length ? parts.join(' ') : undefined; })() }}
                   onLoadedMetadata={handleLoadedMetadata}
                   onTimeUpdate={handleTimeUpdate}
                   onPlay={() => setIsPlaying(true)}
@@ -1159,6 +1209,20 @@ export default function Editor() {
                       ))}
                     </div>
                   )}
+                </div>
+
+                <div className="border-t border-border pt-4">
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Advanced Detection (PySceneDetect)</label>
+                  <p className="text-xs text-muted-foreground mb-2">More accurate backend detection. Save project first.</p>
+                  <div className="flex gap-1.5 mb-2">
+                    {(["content", "adaptive", "threshold"] as const).map(m => (
+                      <button key={m} onClick={() => setAdvancedMethod(m)} className={`flex-1 px-1.5 py-1 rounded text-[10px] capitalize transition-colors ${advancedMethod === m ? "bg-accent text-accent-foreground" : "bg-background hover:bg-accent/20 text-muted-foreground border border-border"}`}>{m}</button>
+                    ))}
+                  </div>
+                  <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={detectScenesAdvanced} disabled={!projectVideoUrl || isDetectingAdvanced}>
+                    {isDetectingAdvanced ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Detecting...</> : <><Zap className="w-3.5 h-3.5" /> PySceneDetect</>}
+                  </Button>
+                  {!projectVideoUrl && videoObjectUrl && <p className="text-xs text-yellow-500 mt-1">Save project first to enable.</p>}
                 </div>
 
                 <div className="border-t border-border pt-4">

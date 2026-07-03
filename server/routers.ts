@@ -7,6 +7,8 @@ import * as db from "./db";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { execSync } from "child_process";
 import { join } from "path";
+import { tmpdir } from "os";
+import { writeFileSync, unlinkSync, existsSync } from "fs";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
 
@@ -265,6 +267,47 @@ export const appRouter = router({
         } catch (error) {
           console.error("Scene detection error:", error);
           throw new Error(`Scene detection failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+        }
+      }),
+
+    detectAdvanced: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+        videoUrl: z.string(),
+        threshold: z.number().default(27.0),
+        method: z.enum(["content", "adaptive", "threshold"]).default("content"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const tmpPath = join(tmpdir(), `pixelcraft_${ctx.user.id}_${Date.now()}.mp4`);
+        try {
+          // Download video from S3 to temp file
+          const response = await fetch(input.videoUrl);
+          if (!response.ok) throw new Error(`Failed to download video: ${response.statusText}`);
+          const buffer = Buffer.from(await response.arrayBuffer());
+          writeFileSync(tmpPath, buffer);
+
+          const scriptPath = join(process.cwd(), "server", "scene_detection.py");
+          const command = `python3 "${scriptPath}" "${tmpPath}" ${input.threshold} ${input.method}`;
+          const output = execSync(command, { encoding: "utf-8", timeout: 120000 });
+          const result = JSON.parse(output);
+
+          if (!result.success) throw new Error(result.error || "Scene detection failed");
+
+          // Save to DB
+          for (const scene of result.scenes) {
+            await db.createSceneDetection(
+              input.projectId,
+              Math.floor(scene.timestamp * 1000),
+              scene.confidence
+            );
+          }
+
+          return { success: true, scenes: result.scenes, sceneCount: result.scene_count, method: result.method };
+        } catch (error) {
+          console.error("Advanced scene detection error:", error);
+          throw new Error(`Advanced scene detection failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+        } finally {
+          if (existsSync(tmpPath)) unlinkSync(tmpPath);
         }
       }),
 

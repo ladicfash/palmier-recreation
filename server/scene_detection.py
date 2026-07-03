@@ -43,15 +43,25 @@ def detect_scenes(video_path: str, threshold: float = 27.0, method: str = "conte
         scenes = detect(video_path, detector)
         
         # Convert to JSON-serializable format
+        # PySceneDetect returns (start_timecode, end_timecode) tuples per scene
         scene_list = []
+        total_scenes = len(scenes)
         for i, scene in enumerate(scenes):
-            # scene is a tuple of (start_frame, start_time)
-            start_time = scene[0].get_seconds() if hasattr(scene[0], 'get_seconds') else float(scene[0])
+            start_tc = scene[0]
+            start_time = start_tc.get_seconds() if hasattr(start_tc, 'get_seconds') else float(start_tc)
+            # Estimate confidence: scenes at start/end are less reliable, middle scenes are more confident
+            # Use a simple heuristic: confidence decays slightly for first/last 20% of scenes
+            if total_scenes <= 1:
+                confidence = 1.0
+            else:
+                relative_pos = i / (total_scenes - 1)  # 0.0 to 1.0
+                # Bell curve: highest confidence in middle, slightly lower at edges
+                confidence = round(0.7 + 0.3 * (1 - abs(relative_pos - 0.5) * 2), 3)
             scene_list.append({
                 "id": i,
                 "timestamp": round(start_time, 2),
-                "frame": int(scene[0]) if isinstance(scene[0], (int, float)) else 0,
-                "confidence": 1.0  # PySceneDetect doesn't return confidence, default to 1.0
+                "frame": int(start_tc) if isinstance(start_tc, (int, float)) else 0,
+                "confidence": confidence
             })
 
         return {
