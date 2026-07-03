@@ -117,6 +117,38 @@ export const appRouter = router({
       }),
   }),
 
+  clips: router({
+    create: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+        name: z.string(),
+        startTime: z.number(),
+        endTime: z.number(),
+        type: z.string().default("video"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return db.createClip(
+          input.projectId,
+          input.name,
+          input.startTime,
+          input.endTime,
+          input.type as "video" | "audio" | "text"
+        );
+      }),
+
+    list: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return db.getProjectClips(input.projectId);
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ clipId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        return db.deleteClip(input.clipId);
+      }),
+  }),
+
   sceneDetection: router({
     detect: protectedProcedure
       .input(z.object({

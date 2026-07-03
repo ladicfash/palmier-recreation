@@ -34,11 +34,11 @@
 - [ ] Create short-form clip export (TikTok/Reels dimensions)
 
 ### Phase 6: Polish & Testing
-- [ ] Add keyboard shortcuts
+- [x] Add keyboard shortcuts (Space=play, arrows=seek, M=mute)
 - [ ] Implement undo/redo
-- [ ] Create loading states and error handling
-- [ ] Test on multiple browsers
-- [ ] Performance optimization
+- [x] Create loading states and error handling
+- [x] Test on multiple browsers
+- [x] Performance optimization (stable object URLs, memoized callbacks)
 
 ## Future Enhancements
 - [ ] AI video generation (Kling integration)
@@ -46,3 +46,22 @@
 - [ ] Collaboration features
 - [ ] Template system
 - [ ] Mobile app version
+
+### Bug Fixes & Audit (Full Trial/Error Pass)
+- [x] Fix: Video upload - stable URL.createObjectURL with cleanup on unmount
+- [x] Fix: Playback controls - play/pause synced via onPlay/onPause events
+- [x] Fix: Speed slider - wired to video.playbackRate on load and change
+- [x] Fix: Opacity slider - CSS opacity applied live on video element
+- [x] Fix: Trim controls - Set Start/End Here buttons sync with playhead
+- [x] Fix: Create Clip - clips saved to DB when project exists
+- [x] Fix: Save project - list invalidated after create/update
+- [x] Fix: Load project - correct project ID passed to loadProjectFromDb
+- [x] Fix: Projects dropdown - correct project loaded on click
+- [x] Fix: Scene detection - client-side histogram analysis, no API needed
+- [x] Fix: Timeline - playhead syncs via onTimeUpdate event
+- [x] Fix: dotenv missing error - was from first cold start, resolved after pnpm install
+- [x] Add: Text overlay - renders on top of video with color/size controls
+- [ ] Add: Export - MediaRecorder-based trimmed video export
+- [ ] Add: Short-form clip export (9:16 aspect ratio)
+- [x] Add: Keyboard shortcuts (space=play/pause, left/right=seek, M=mute)
+- [ ] Add: Undo/redo for editing actions
