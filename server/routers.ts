@@ -11,6 +11,7 @@ import { tmpdir } from "os";
 import { writeFileSync, unlinkSync, existsSync } from "fs";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
+import { generateSpeech, getAvailableVoices } from "./voice_generation";
 
 export const appRouter = router({
   system: systemRouter,
@@ -380,6 +381,30 @@ print(json.dumps(result))
           if (existsSync(tmpPath)) unlinkSync(tmpPath);
         }
       }),
+  }),
+
+  voice: router({
+    generate: protectedProcedure
+      .input(z.object({
+        text: z.string().min(1).max(5000),
+        voiceName: z.string().default("en-US-Neural2-A"),
+        speakingRate: z.number().min(0.25).max(4).default(1),
+        pitch: z.number().min(-20).max(20).default(0),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const result = await generateSpeech(input.text, input.voiceName, input.speakingRate, input.pitch);
+          if (!result) throw new Error("Voice generation failed");
+          const key = `audio/generated/${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`;
+          const { url } = await storagePut(key, result.audioBuffer, result.mimeType);
+          return { success: true, url, key };
+        } catch (error) {
+          console.error("Voice generation error:", error);
+          throw new Error(`Voice generation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+        }
+      }),
+
+    listVoices: publicProcedure.query(() => getAvailableVoices()),
   }),
 
   colorGrading: router({

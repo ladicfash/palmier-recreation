@@ -7,11 +7,16 @@ import { AudioEffectsPanel } from "@/components/AudioEffectsPanel";
 import { ColorGradingPanel } from "@/components/ColorGradingPanel";
 import { EffectSettings, DEFAULT_EFFECTS, getEffectsCSSFilter } from "@/lib/videoEffects";
 import { ColorGrade, DEFAULT_GRADE, gradeToCSS } from "@/components/ColorGradingPanel";
+import LayerPanel from "@/components/LayerPanel";
+import LayerCompositor from "@/components/LayerCompositor";
+import VoiceGenerationPanel from "@/components/VoiceGenerationPanel";
+import { Layer, LayerType, createLayer } from "@/lib/layers";
 import {
   Upload, Play, Pause, Volume2, VolumeX, Download,
   Save, FolderOpen, Scissors, Type,
   Zap, Film, X, Loader2, SplitSquareHorizontal,
-  Undo2, Redo2, MessageSquare, Palette, Music, ChevronDown, Send
+  Undo2, Redo2, MessageSquare, Palette, Music, ChevronDown, Send,
+  Layers as LayersIcon
 } from "lucide-react";
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Link } from "wouter";
@@ -190,7 +195,74 @@ export default function Editor() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Panel
-  const [activePanel, setActivePanel] = useState<"edit" | "ai" | "text" | "effects" | "color" | "chat">("edit");
+  const [activePanel, setActivePanel] = useState<"edit" | "ai" | "text" | "effects" | "color" | "chat" | "layers" | "voice">("edit");
+
+  // ─── Multi-Layer Editing ──────────────────────────────────────────────
+  const [layers, setLayers] = useState<Layer[]>([]);
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const layerFileInputRef = useRef<HTMLInputElement>(null);
+  const pendingLayerTypeRef = useRef<LayerType | null>(null);
+
+  const handleAddLayer = useCallback((type: LayerType) => {
+    if (type === "text") {
+      const layer = createLayer("text", { text: "New Text", startTime: 0, endTime: Math.max(duration || 10, 5) });
+      setLayers(prev => [...prev, layer]);
+      setSelectedLayerId(layer.id);
+      toast.success("Text layer added");
+      return;
+    }
+    // video / audio / image need a file
+    pendingLayerTypeRef.current = type;
+    if (layerFileInputRef.current) {
+      layerFileInputRef.current.accept =
+        type === "video" ? "video/*" : type === "audio" ? "audio/*" : "image/*";
+      layerFileInputRef.current.click();
+    }
+  }, [duration]);
+
+  const handleLayerFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const type = pendingLayerTypeRef.current;
+    e.target.value = "";
+    if (!file || !type) return;
+    const url = URL.createObjectURL(file);
+    const layer = createLayer(type, {
+      name: file.name.replace(/\.[^.]+$/, ""),
+      src: url,
+      startTime: 0,
+      endTime: Math.max(duration || 10, 5),
+    });
+    setLayers(prev => [...prev, layer]);
+    setSelectedLayerId(layer.id);
+    pendingLayerTypeRef.current = null;
+    toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} layer added: ${file.name}`);
+  }, [duration]);
+
+  const handleDeleteLayer = useCallback((id: string) => {
+    setLayers(prev => {
+      const layer = prev.find(l => l.id === id);
+      if (layer?.src?.startsWith("blob:")) URL.revokeObjectURL(layer.src);
+      return prev.filter(l => l.id !== id);
+    });
+    setSelectedLayerId(prev => (prev === id ? null : prev));
+  }, []);
+
+  const handleMoveLayer = useCallback((id: string, direction: "up" | "down") => {
+    setLayers(prev => {
+      const idx = prev.findIndex(l => l.id === id);
+      if (idx === -1) return prev;
+      // "up" = bring forward = move toward end of array (rendered later = on top)
+      const target = direction === "up" ? idx + 1 : idx - 1;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+  }, []);
+
+  const handleUpdateLayer = useCallback((id: string, patch: Partial<Layer>) => {
+    setLayers(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)));
+  }, []);
   const [audioEffectsTab, setAudioEffectsTab] = useState<"audio" | "effects">("audio");
 
   // Undo/Redo
@@ -983,6 +1055,8 @@ export default function Editor() {
     { id: "text", icon: <Type className="w-3.5 h-3.5" />, label: "Text" },
     { id: "effects", icon: <Music className="w-3.5 h-3.5" />, label: "Audio" },
     { id: "color", icon: <Palette className="w-3.5 h-3.5" />, label: "Color" },
+    { id: "layers", icon: <LayersIcon className="w-3.5 h-3.5" />, label: "Layers" },
+    { id: "voice", icon: <Volume2 className="w-3.5 h-3.5" />, label: "Voice" },
     { id: "chat", icon: <MessageSquare className="w-3.5 h-3.5" />, label: "AI Chat" },
   ] as const;
 
@@ -1092,6 +1166,14 @@ export default function Editor() {
                     {overlay.text}
                   </div>
                 ))}
+                {/* Composited layers (After Effects-style) */}
+                <LayerCompositor
+                  layers={layers}
+                  currentTime={currentTime}
+                  isPlaying={isPlaying}
+                  selectedLayerId={selectedLayerId}
+                  onSelectLayer={id => { setSelectedLayerId(id); setActivePanel("layers"); }}
+                />
               </>
             )}
           </div>
@@ -1401,6 +1483,38 @@ export default function Editor() {
             )}
 
             {/* ── Chatbot Panel ── */}
+            {activePanel === "layers" && (
+              <div className="p-3">
+                <LayerPanel
+                  layers={layers}
+                  selectedLayerId={selectedLayerId}
+                  onSelectLayer={setSelectedLayerId}
+                  onAddLayer={handleAddLayer}
+                  onDeleteLayer={handleDeleteLayer}
+                  onMoveLayer={handleMoveLayer}
+                  onUpdateLayer={handleUpdateLayer}
+                />
+                <input ref={layerFileInputRef} type="file" className="hidden" onChange={handleLayerFileSelected} />
+              </div>
+            )}
+
+            {activePanel === "voice" && (
+              <div className="p-3">
+                <VoiceGenerationPanel
+                  onAddAudioLayer={(src, name) => {
+                    const layer = createLayer("audio", {
+                      name,
+                      src,
+                      startTime: 0,
+                      endTime: Math.max(duration || 10, 5),
+                    });
+                    setLayers(prev => [...prev, layer]);
+                    setSelectedLayerId(layer.id);
+                  }}
+                />
+              </div>
+            )}
+
             {activePanel === "chat" && (
               <div className="flex flex-col h-full -m-3">
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0" style={{ maxHeight: "calc(100vh - 280px)" }}>

@@ -129,20 +129,20 @@
 - [x] End-to-end test (test_scene_importance.py) - ALL TESTS PASSED
 
 ## Phase 13: Multi-Layer Editing (After Effects-style)
-- [ ] Design and implement Layer data model (type, transforms, blending, effects)
-- [ ] Build Layer panel UI (add/delete/reorder layers, visibility toggle)
-- [ ] Implement layer transforms UI (scale, rotation, position, opacity sliders)
-- [ ] Implement layer blending modes (normal, multiply, screen, overlay, etc.)
-- [ ] Build canvas preview (render all layers to canvas in z-order)
-- [ ] Implement layer effects (apply effects per-layer, not just global)
-- [ ] Add layer keyframes (future: animation support)
+- [x] Design and implement Layer data model (type, transforms, blending, effects in lib/layers.ts)
+- [x] Build Layer panel UI (add/delete/reorder layers, visibility + lock toggles)
+- [x] Implement layer transforms UI (scale, rotation, position, opacity sliders)
+- [x] Implement layer blending modes (12 modes: normal, multiply, screen, overlay, etc.)
+- [x] Build layer compositor preview (renders layers in z-order over base video, synced playback)
+- [x] Implement layer effects (per-layer brightness/contrast/saturation/blur/hue)
+- [ ] Add layer keyframes (deferred: animation support)
 
-## Phase 14: Eleven Labs Voice Generation
-- [ ] Add ELEVENLABS_API_KEY to secrets
-- [ ] Implement voice generation endpoint (tRPC)
-- [ ] Build voice generation UI (text input, voice selector, generate button)
-- [ ] Add generated audio to timeline as audio layer
-- [ ] Test voice quality and latency
+## Phase 14: Google Cloud Text-to-Speech Voice Generation
+- [x] Add GOOGLE_CLOUD_TTS_KEY to secrets (user to provide)
+- [x] Implement voice generation endpoint (tRPC: voice.generate, voice.listVoices)
+- [x] Build voice generation UI (text input, 8 voice options, rate/pitch sliders)
+- [x] Add generated audio to timeline as audio layer (auto-creates audio layer)
+- [ ] Test voice quality and latency (waiting for user to provide Google Cloud key)
 
 ## Phase 15: Runway Video Generation (Alternative to Kling)
 - [ ] Add RUNWAY_API_KEY to secrets
