@@ -200,6 +200,42 @@ export const appRouter = router({
       }),
   }),
 
+  audioTracks: router({
+    create: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+        name: z.string(),
+        audioUrl: z.string(),
+        audioKey: z.string(),
+        duration: z.number(),
+        volume: z.number().default(100),
+        startTime: z.number().default(0),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return db.createAudioTrack(
+          input.projectId,
+          input.name,
+          input.audioUrl,
+          input.audioKey,
+          input.duration,
+          input.volume,
+          input.startTime
+        );
+      }),
+
+    list: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return db.getProjectAudioTracks(input.projectId);
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ trackId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        return db.deleteAudioTrack(input.trackId);
+      }),
+  }),
+
   sceneDetection: router({
     detect: protectedProcedure
       .input(z.object({

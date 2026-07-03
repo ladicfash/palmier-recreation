@@ -97,3 +97,45 @@ export const sceneDetections = mysqlTable("sceneDetections", {
 
 export type SceneDetection = typeof sceneDetections.$inferSelect;
 export type InsertSceneDetection = typeof sceneDetections.$inferInsert;
+
+
+/**
+ * Audio tracks table - stores uploaded audio files for projects
+ */
+export const audioTracks = mysqlTable("audioTracks", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  audioUrl: varchar("audioUrl", { length: 512 }).notNull(),
+  audioKey: varchar("audioKey", { length: 512 }).notNull(),
+  duration: int("duration").notNull(), // in milliseconds
+  volume: int("volume").default(100), // 0-100
+  startTime: int("startTime").default(0), // when to start playing in timeline (ms)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AudioTrack = typeof audioTracks.$inferSelect;
+export type InsertAudioTrack = typeof audioTracks.$inferInsert;
+
+/**
+ * Color grading table - stores color grading adjustments per project
+ */
+export const colorGrades = mysqlTable("colorGrades", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  clipId: int("clipId").references(() => clips.id, { onDelete: "cascade" }),
+  brightness: int("brightness").default(0), // -100 to 100
+  contrast: int("contrast").default(0), // -100 to 100
+  saturation: int("saturation").default(0), // -100 to 100
+  hue: int("hue").default(0), // -180 to 180
+  temperature: int("temperature").default(0), // -100 to 100 (warm to cool)
+  tint: int("tint").default(0), // -100 to 100 (green to magenta)
+  lutUrl: varchar("lutUrl", { length: 512 }), // URL to .cube LUT file
+  preset: varchar("preset", { length: 50 }), // cinematic, warm, cool, vintage, etc.
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ColorGrade = typeof colorGrades.$inferSelect;
+export type InsertColorGrade = typeof colorGrades.$inferInsert;

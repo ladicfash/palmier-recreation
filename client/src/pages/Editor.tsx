@@ -3,6 +3,8 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { TimelineEditor } from "@/components/TimelineEditor";
 import { ExportDialog } from "@/components/ExportDialog";
+import { AudioEffectsPanel } from "@/components/AudioEffectsPanel";
+import { EffectSettings, DEFAULT_EFFECTS } from "@/lib/videoEffects";
 import {
   Upload, Play, Pause, Volume2, Download,
   Plus, Save, FolderOpen, Scissors, Type,
@@ -43,6 +45,14 @@ interface Caption {
   startTime: number; // ms
   endTime: number;   // ms
   text: string;
+}
+
+interface AudioTrack {
+  id: string;
+  name: string;
+  duration: number;
+  volume: number;
+  startTime: number;
 }
 
 // ─── Undo/Redo History ────────────────────────────────────────────────────────
@@ -165,12 +175,18 @@ export default function Editor() {
   const [textColor, setTextColor] = useState("#ffffff");
   const [fontSize, setFontSize] = useState(24);
 
+  // Audio & Effects state
+  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
+  const [effects, setEffects] = useState<EffectSettings>(DEFAULT_EFFECTS);
+  const [audioEffectsTab, setAudioEffectsTab] = useState<"audio" | "effects">("audio");
+  const [showAudioEffectsPanel, setShowAudioEffectsPanel] = useState(false);
+
   // AI state
   const [isDetectingScenes, setIsDetectingScenes] = useState(false);
   const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
   const [captions, setCaptions] = useState<Caption[]>([]);
   const [showCaptions, setShowCaptions] = useState(true);
-  const [activePanel, setActivePanel] = useState<"edit" | "ai" | "text">("edit");
+  const [activePanel, setActivePanel] = useState<"edit" | "ai" | "text" | "effects">("edit");
 
   // Undo/redo history
   const historyRef = useRef<EditorSnapshot[]>([]);
@@ -1131,13 +1147,13 @@ export default function Editor() {
         <div className="w-72 flex flex-col overflow-hidden bg-card/20">
           {/* Panel Tabs */}
           <div className="flex border-b border-border">
-            {(["edit", "ai", "text"] as const).map(panel => (
+            {(["edit", "ai", "text", "effects"] as const).map(panel => (
               <button
                 key={panel}
                 onClick={() => setActivePanel(panel)}
                 className={`flex-1 py-2.5 text-xs font-medium capitalize transition-colors ${activePanel === panel ? "border-b-2 border-accent text-accent" : "text-muted-foreground hover:text-foreground"}`}
               >
-                {panel === "edit" ? "Edit" : panel === "ai" ? "AI" : "Text"}
+                {panel === "edit" ? "Edit" : panel === "ai" ? "AI" : panel === "text" ? "Text" : "Effects"}
               </button>
             ))}
           </div>
@@ -1618,6 +1634,43 @@ export default function Editor() {
                   </p>
                 )}
               </>
+            )}
+
+            {/* Effects Panel */}
+            {activePanel === "effects" && (
+              <AudioEffectsPanel
+                videoRef={videoRef}
+                audioTracks={audioTracks}
+                onAddAudioTrack={async (file) => {
+                  const reader = new FileReader();
+                  reader.onload = async (e) => {
+                    const data = e.target?.result as string;
+                    const audio = new Audio();
+                    audio.onloadedmetadata = () => {
+                      const newTrack: AudioTrack = {
+                        id: `audio-${Date.now()}`,
+                        name: file.name,
+                        duration: audio.duration * 1000,
+                        volume: 100,
+                        startTime: 0,
+                      };
+                      setAudioTracks(prev => [...prev, newTrack]);
+                    };
+                    audio.src = data;
+                  };
+                  reader.readAsDataURL(file);
+                }}
+                onRemoveAudioTrack={(trackId) => {
+                  setAudioTracks(prev => prev.filter(t => t.id !== trackId));
+                }}
+                onUpdateAudioTrack={(trackId, volume) => {
+                  setAudioTracks(prev => prev.map(t => t.id === trackId ? { ...t, volume } : t));
+                }}
+                effects={effects}
+                onEffectsChange={setEffects}
+                activeTab={audioEffectsTab}
+                onTabChange={setAudioEffectsTab}
+              />
             )}
           </div>
         </div>

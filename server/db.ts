@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, projects, clips, captions, sceneDetections, type Project, type Clip, type Caption, type SceneDetection } from "../drizzle/schema";
+import { InsertUser, users, projects, clips, captions, sceneDetections, audioTracks, colorGrades, type Project, type Clip, type Caption, type SceneDetection, type AudioTrack, type ColorGrade } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -260,4 +260,54 @@ export async function getProjectSceneDetections(projectId: number) {
   if (!db) throw new Error("Database not available");
 
   return db.select().from(sceneDetections).where(eq(sceneDetections.projectId, projectId));
+}
+
+
+// Audio track queries
+export async function createAudioTrack(projectId: number, name: string, audioUrl: string, audioKey: string, duration: number, volume: number = 100, startTime: number = 0) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.insert(audioTracks).values({
+    projectId,
+    name,
+    audioUrl,
+    audioKey,
+    duration,
+    volume,
+    startTime,
+  });
+}
+
+export async function getProjectAudioTracks(projectId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.select().from(audioTracks).where(eq(audioTracks.projectId, projectId));
+}
+
+export async function deleteAudioTrack(trackId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.delete(audioTracks).where(eq(audioTracks.id, trackId));
+}
+
+// Color grade queries
+export async function createColorGrade(projectId: number, clipId: number | null, colorData: Partial<ColorGrade>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.insert(colorGrades).values({
+    projectId,
+    clipId,
+    ...colorData,
+  });
+}
+
+export async function getProjectColorGrades(projectId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.select().from(colorGrades).where(eq(colorGrades.projectId, projectId));
 }

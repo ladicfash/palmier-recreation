@@ -65,3 +65,44 @@
 - [x] Add: Short-form clip export (9:16 / 1:1 / 16:9 in ExportDialog)
 - [x] Add: Keyboard shortcuts (space=play/pause, left/right=seek, M=mute)
 - [x] Add: Undo/redo for editing actions (50-step history with keyboard shortcuts)
+
+
+## Phase 7: Audio Support (CURRENT)
+- [ ] Audio file upload (MP3, WAV, OGG, M4A)
+- [ ] Multi-track audio support (add audio tracks to timeline)
+- [ ] Audio volume control per track
+- [ ] Audio mixing (combine video audio + uploaded audio)
+- [ ] Extract audio from video for separate editing
+
+## Phase 8: Effects Library (CURRENT)
+- [ ] Brightness/Contrast adjustment
+- [ ] Saturation control
+- [ ] Hue shift
+- [ ] Blur effect
+- [ ] Grayscale filter
+- [ ] Sepia filter
+- [ ] Vintage effect
+- [ ] Custom filter combinations
+
+## Phase 9: Color Grading (NEXT)
+- [ ] Curves adjustment (RGB, individual channels)
+- [ ] Levels adjustment
+- [ ] Color wheels (Shadows/Midtones/Highlights)
+- [ ] Presets (Cinematic, Warm, Cool, Vintage, etc.)
+- [ ] LUT support (.cube file loading)
+- [ ] Per-clip color grading (keyframes on timeline)
+- [ ] AI color suggestions (histogram analysis + LLM)
+- [ ] Color grading preview on timeline
+
+## Phase 10: Chatbot Command Interface (NEXT)
+- [ ] Sidebar chatbot panel
+- [ ] Command parsing (trim, speed, export, detect scenes, add caption, etc.)
+- [ ] Natural language command support
+- [ ] Command history
+- [ ] Help/suggestions for available commands
+
+## Phase 11: Advanced Scene Detection (FUTURE)
+- [ ] Integrate PySceneDetect backend (more accurate than histogram)
+- [ ] Support multiple detection methods (content, adaptive, threshold)
+- [ ] Combine histogram + PySceneDetect for comprehensive detection
+- [ ] Show confidence scores for detected scenes
