@@ -4,17 +4,20 @@ import { Button } from "@/components/ui/button";
 import { TimelineEditor } from "@/components/TimelineEditor";
 import { ExportDialog } from "@/components/ExportDialog";
 import { AudioEffectsPanel } from "@/components/AudioEffectsPanel";
+import { ColorGradingPanel } from "@/components/ColorGradingPanel";
 import { EffectSettings, DEFAULT_EFFECTS } from "@/lib/videoEffects";
+import { ColorGrade, DEFAULT_GRADE } from "@/components/ColorGradingPanel";
 import {
-  Upload, Play, Pause, Volume2, Download,
-  Plus, Save, FolderOpen, Scissors, Type,
-  Zap, Film, ChevronRight, X, Loader2, AlertCircle, SplitSquareHorizontal,
-  Undo2, Redo2
+  Upload, Play, Pause, Volume2, VolumeX, Download,
+  Save, FolderOpen, Scissors, Type,
+  Zap, Film, X, Loader2, SplitSquareHorizontal,
+  Undo2, Redo2, MessageSquare, Palette, Music, ChevronDown, Send
 } from "lucide-react";
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface TimelineClip {
   id: string;
   name: string;
@@ -42,8 +45,8 @@ interface SceneMarker {
 
 interface Caption {
   id: string;
-  startTime: number; // ms
-  endTime: number;   // ms
+  startTime: number;
+  endTime: number;
   text: string;
 }
 
@@ -53,9 +56,15 @@ interface AudioTrack {
   duration: number;
   volume: number;
   startTime: number;
+  objectUrl?: string;
+  audioEl?: HTMLAudioElement;
 }
 
-// ─── Undo/Redo History ────────────────────────────────────────────────────────
+interface ChatMessage {
+  role: "user" | "assistant";
+  text: string;
+}
+
 interface EditorSnapshot {
   clips: TimelineClip[];
   textOverlays: TextOverlay[];
@@ -67,7 +76,14 @@ interface EditorSnapshot {
   opacity: number;
 }
 
-// ─── MediaRecorder Export Helper ─────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function formatTime(s: number): string {
+  if (!isFinite(s) || s < 0) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
 async function exportTrimmedClip(
   videoEl: HTMLVideoElement,
   startTime: number,
@@ -77,47 +93,28 @@ async function exportTrimmedClip(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     try {
-      // Capture the video element's stream
-      const stream = (videoEl as any).captureStream
-        ? (videoEl as any).captureStream(30)
-        : (videoEl as any).mozCaptureStream
-        ? (videoEl as any).mozCaptureStream(30)
-        : null;
-
-      if (!stream) {
-        reject(new Error("captureStream not supported in this browser"));
-        return;
-      }
+      const stream = (videoEl as any).captureStream?.(30) ?? (videoEl as any).mozCaptureStream?.(30);
+      if (!stream) { reject(new Error("captureStream not supported")); return; }
 
       const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
         ? "video/webm;codecs=vp9"
-        : MediaRecorder.isTypeSupported("video/webm")
-        ? "video/webm"
-        : "video/mp4";
+        : MediaRecorder.isTypeSupported("video/webm") ? "video/webm" : "video/mp4";
 
       const recorder = new MediaRecorder(stream, { mimeType });
       const chunks: Blob[] = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
-        a.download = `${fileName}.webm`;
-        a.click();
+        a.href = url; a.download = `${fileName}.webm`; a.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         resolve();
       };
+      recorder.onerror = e => reject(new Error("MediaRecorder error: " + e));
 
-      recorder.onerror = (e) => reject(new Error("MediaRecorder error: " + e));
-
-      // Seek to start, then record
       videoEl.currentTime = startTime;
-      videoEl.playbackRate = 1; // record at normal speed
+      videoEl.playbackRate = 1;
       videoEl.muted = true;
 
       const clipDuration = endTime - startTime;
@@ -125,30 +122,21 @@ async function exportTrimmedClip(
       const tick = setInterval(() => {
         elapsed += 0.25;
         onProgress(Math.min(100, Math.round((elapsed / clipDuration) * 100)));
-        if (elapsed >= clipDuration) {
-          clearInterval(tick);
-          videoEl.pause();
-          recorder.stop();
-        }
+        if (elapsed >= clipDuration) { clearInterval(tick); videoEl.pause(); recorder.stop(); }
       }, 250);
 
-      videoEl.onseeked = () => {
-        recorder.start(100);
-        videoEl.play().catch(reject);
-      };
-    } catch (err) {
-      reject(err);
-    }
+      videoEl.onseeked = () => { recorder.start(100); videoEl.play().catch(reject); };
+    } catch (err) { reject(err); }
   });
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function Editor() {
   const { isAuthenticated } = useAuth();
   const utils = trpc.useUtils();
 
-  // Video refs and state
+  // Video
   const videoRef = useRef<HTMLVideoElement>(null);
-  const videoContainerRef = useRef<HTMLDivElement>(null);
   const videoFileRef = useRef<File | null>(null);
   const [videoObjectUrl, setVideoObjectUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -158,7 +146,7 @@ export default function Editor() {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
 
-  // Project state
+  // Project
   const [projectName, setProjectName] = useState("Untitled Project");
   const [projectDbId, setProjectDbId] = useState<number | null>(null);
   const [clips, setClips] = useState<TimelineClip[]>([]);
@@ -166,7 +154,7 @@ export default function Editor() {
   const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
   const [showProjects, setShowProjects] = useState(false);
 
-  // Editing state
+  // Editing
   const [speed, setSpeed] = useState(1);
   const [opacity, setOpacity] = useState(1);
   const [trimStart, setTrimStart] = useState(0);
@@ -175,77 +163,94 @@ export default function Editor() {
   const [textColor, setTextColor] = useState("#ffffff");
   const [fontSize, setFontSize] = useState(24);
 
-  // Audio & Effects state
+  // Audio (Web Audio API)
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const audioGainRef = useRef<GainNode | null>(null);
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
-  const [effects, setEffects] = useState<EffectSettings>(DEFAULT_EFFECTS);
-  const [audioEffectsTab, setAudioEffectsTab] = useState<"audio" | "effects">("audio");
-  const [showAudioEffectsPanel, setShowAudioEffectsPanel] = useState(false);
+  const audioTrackGainsRef = useRef<Map<string, GainNode>>(new Map());
 
-  // AI state
+  // Effects & Color Grading
+  const [effects, setEffects] = useState<EffectSettings>(DEFAULT_EFFECTS);
+  const [colorGrade, setColorGrade] = useState<ColorGrade>(DEFAULT_GRADE);
+
+  // AI
   const [isDetectingScenes, setIsDetectingScenes] = useState(false);
   const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
   const [captions, setCaptions] = useState<Caption[]>([]);
   const [showCaptions, setShowCaptions] = useState(true);
-  const [activePanel, setActivePanel] = useState<"edit" | "ai" | "text" | "effects">("edit");
 
-  // Undo/redo history
+  // Chatbot
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    { role: "assistant", text: "Hi! I'm your PixelCraft AI assistant. Tell me what you want to do — for example:\n• \"trim to 30 seconds\"\n• \"speed up to 2x\"\n• \"detect scenes\"\n• \"export as 9:16\"\n• \"add caption Hello World\"" }
+  ]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Panel
+  const [activePanel, setActivePanel] = useState<"edit" | "ai" | "text" | "effects" | "color" | "chat">("edit");
+  const [audioEffectsTab, setAudioEffectsTab] = useState<"audio" | "effects">("audio");
+
+  // Undo/Redo
   const historyRef = useRef<EditorSnapshot[]>([]);
   const historyIndexRef = useRef<number>(-1);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
-  // Export state
+  // Export
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [exportingClipId, setExportingClipId] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
 
   // tRPC
-  const createProject = trpc.projects.create.useMutation({
-    onSuccess: () => utils.projects.list.invalidate(),
-    onError: (err) => toast.error("Failed to create project: " + err.message),
-  });
-  const updateProject = trpc.projects.update.useMutation({
-    onSuccess: () => utils.projects.list.invalidate(),
-    onError: (err) => toast.error("Failed to update project: " + err.message),
-  });
-  const deleteProject = trpc.projects.delete.useMutation({
-    onSuccess: () => utils.projects.list.invalidate(),
-    onError: (err) => toast.error("Failed to delete project: " + err.message),
-  });
-  const saveClipMutation = trpc.clips.create.useMutation({
-    onError: (err) => console.warn("Clip DB save failed:", err.message),
-  });
-  const uploadVideoMutation = trpc.videos.upload.useMutation({
-    onError: (err) => console.warn("Video upload failed:", err.message),
-  });
-  const uploadAudioMutation = trpc.videos.uploadAudio.useMutation({
-    onError: (err) => console.warn("Audio upload failed:", err.message),
-  });
-  const generateCaptionsMutation = trpc.captions.generate.useMutation({
-    onError: (err) => toast.error("Caption generation failed: " + err.message),
-  });
-  const { data: projectList, isLoading: isLoadingProjects, error: projectListError } = trpc.projects.list.useQuery();
+  const createProject = trpc.projects.create.useMutation({ onSuccess: () => utils.projects.list.invalidate() });
+  const updateProject = trpc.projects.update.useMutation({ onSuccess: () => utils.projects.list.invalidate() });
+  const deleteProject = trpc.projects.delete.useMutation({ onSuccess: () => utils.projects.list.invalidate() });
+  const saveClipMutation = trpc.clips.create.useMutation();
+  const uploadVideoMutation = trpc.videos.upload.useMutation();
+  const uploadAudioMutation = trpc.videos.uploadAudio.useMutation();
+  const generateCaptionsMutation = trpc.captions.generate.useMutation();
+  const chatbotMutation = trpc.chatbot.command.useMutation();
+  const { data: projectList } = trpc.projects.list.useQuery();
 
-  // ─── Undo/Redo ────────────────────────────────────────────────────────────────
+  // ─── Web Audio API Setup ───────────────────────────────────────────────────
+  const initAudioContext = useCallback(() => {
+    if (audioCtxRef.current) return audioCtxRef.current;
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+    return ctx;
+  }, []);
+
+  const connectVideoToAudioGraph = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || audioSourceRef.current) return;
+    try {
+      const ctx = initAudioContext();
+      const source = ctx.createMediaElementSource(video);
+      const gain = ctx.createGain();
+      gain.gain.value = volume;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      audioSourceRef.current = source;
+      audioGainRef.current = gain;
+    } catch (err) {
+      console.warn("Could not connect video to AudioContext:", err);
+    }
+  }, [volume, initAudioContext]);
+
+  // ─── Undo/Redo ─────────────────────────────────────────────────────────────
   const captureSnapshot = useCallback((): EditorSnapshot => ({
-    clips: [...clips],
-    textOverlays: [...textOverlays],
-    scenes: [...scenes],
-    captions: [...captions],
-    trimStart,
-    trimEnd,
-    speed,
-    opacity,
+    clips: [...clips], textOverlays: [...textOverlays], scenes: [...scenes],
+    captions: [...captions], trimStart, trimEnd, speed, opacity,
   }), [clips, textOverlays, scenes, captions, trimStart, trimEnd, speed, opacity]);
 
   const pushHistory = useCallback((snapshot: EditorSnapshot) => {
     const history = historyRef.current;
     const idx = historyIndexRef.current;
-    // Discard any redo states
     history.splice(idx + 1);
     history.push(snapshot);
-    // Keep last 50 snapshots
     if (history.length > 50) history.shift();
     historyIndexRef.current = history.length - 1;
     setCanUndo(historyIndexRef.current > 0);
@@ -257,17 +262,11 @@ export default function Editor() {
     if (idx <= 0) return;
     historyIndexRef.current = idx - 1;
     const snap = historyRef.current[historyIndexRef.current]!;
-    setClips(snap.clips);
-    setTextOverlays(snap.textOverlays);
-    setScenes(snap.scenes);
-    setCaptions(snap.captions);
-    setTrimStart(snap.trimStart);
-    setTrimEnd(snap.trimEnd);
-    setSpeed(snap.speed);
-    setOpacity(snap.opacity);
+    setClips(snap.clips); setTextOverlays(snap.textOverlays); setScenes(snap.scenes);
+    setCaptions(snap.captions); setTrimStart(snap.trimStart); setTrimEnd(snap.trimEnd);
+    setSpeed(snap.speed); setOpacity(snap.opacity);
     if (videoRef.current) videoRef.current.playbackRate = snap.speed;
-    setCanUndo(historyIndexRef.current > 0);
-    setCanRedo(true);
+    setCanUndo(historyIndexRef.current > 0); setCanRedo(true);
     toast.success("Undo");
   }, []);
 
@@ -276,69 +275,52 @@ export default function Editor() {
     if (idx >= historyRef.current.length - 1) return;
     historyIndexRef.current = idx + 1;
     const snap = historyRef.current[historyIndexRef.current]!;
-    setClips(snap.clips);
-    setTextOverlays(snap.textOverlays);
-    setScenes(snap.scenes);
-    setCaptions(snap.captions);
-    setTrimStart(snap.trimStart);
-    setTrimEnd(snap.trimEnd);
-    setSpeed(snap.speed);
-    setOpacity(snap.opacity);
+    setClips(snap.clips); setTextOverlays(snap.textOverlays); setScenes(snap.scenes);
+    setCaptions(snap.captions); setTrimStart(snap.trimStart); setTrimEnd(snap.trimEnd);
+    setSpeed(snap.speed); setOpacity(snap.opacity);
     if (videoRef.current) videoRef.current.playbackRate = snap.speed;
-    setCanUndo(true);
-    setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+    setCanUndo(true); setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
     toast.success("Redo");
   }, []);
 
-  // ─── Video Upload ─────────────────────────────────────────────────────────────
+  const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSnapshotRef = useRef<EditorSnapshot | null>(null);
+  const pushHistoryDebounced = useCallback((snapshot: EditorSnapshot) => {
+    if (!pendingSnapshotRef.current) pendingSnapshotRef.current = snapshot;
+    if (historyDebounceRef.current) clearTimeout(historyDebounceRef.current);
+    historyDebounceRef.current = setTimeout(() => {
+      if (pendingSnapshotRef.current) { pushHistory(pendingSnapshotRef.current); pendingSnapshotRef.current = null; }
+    }, 600);
+  }, [pushHistory]);
+
+  // ─── Video Upload ──────────────────────────────────────────────────────────
   const handleVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    const maxSize = 500 * 1024 * 1024; // 500 MB
-    if (file.size > maxSize) {
-      toast.error("File too large. Maximum size is 500 MB.");
-      return;
-    }
-
+    if (file.size > 500 * 1024 * 1024) { toast.error("File too large. Max 500 MB."); return; }
     if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
-
+    // Disconnect old audio graph so we can reconnect fresh
+    audioSourceRef.current = null;
+    audioGainRef.current = null;
     videoFileRef.current = file;
     const url = URL.createObjectURL(file);
     setVideoObjectUrl(url);
     setProjectName(file.name.replace(/\.[^/.]+$/, ""));
-    setIsVideoLoading(true);
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-    setTrimStart(0);
-    setTrimEnd(0);
-    setClips([]);
-    setScenes([]);
-    setTextOverlays([]);
-    // Reset input so same file can be re-uploaded
+    setIsVideoLoading(true); setIsPlaying(false);
+    setCurrentTime(0); setDuration(0); setTrimStart(0); setTrimEnd(0);
+    setClips([]); setScenes([]); setTextOverlays([]); setCaptions([]);
     e.target.value = "";
   }, [videoObjectUrl]);
 
-  // Cleanup object URL on unmount
-  useEffect(() => {
-    return () => {
-      if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => () => { if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl); }, []);
 
-  // ─── Video Events ─────────────────────────────────────────────────────────────
+  // ─── Video Events ──────────────────────────────────────────────────────────
   const handleLoadedMetadata = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     const dur = isFinite(video.duration) ? video.duration : 0;
-    setDuration(dur);
-    setTrimEnd(dur);
-    setIsVideoLoading(false);
-    video.playbackRate = speed;
-    video.volume = volume;
-    video.muted = isMuted;
+    setDuration(dur); setTrimEnd(dur); setIsVideoLoading(false);
+    video.playbackRate = speed; video.volume = volume; video.muted = isMuted;
   }, [speed, volume, isMuted]);
 
   const handleTimeUpdate = useCallback(() => {
@@ -346,28 +328,30 @@ export default function Editor() {
   }, []);
 
   const handleVideoEnded = useCallback(() => setIsPlaying(false), []);
-
-  const handleVideoError = useCallback(() => {
-    setIsVideoLoading(false);
-    toast.error("Failed to load video. Check the file format.");
-  }, []);
+  const handleVideoError = useCallback(() => { setIsVideoLoading(false); toast.error("Failed to load video."); }, []);
 
   const handlePlayPause = useCallback(async () => {
     const video = videoRef.current;
     if (!video || !videoObjectUrl) return;
+    // Resume AudioContext on first user gesture
+    if (audioCtxRef.current?.state === "suspended") audioCtxRef.current.resume();
     try {
-      if (isPlaying) {
-        video.pause();
-      } else {
+      if (isPlaying) { video.pause(); }
+      else {
+        connectVideoToAudioGraph();
+        // Sync audio tracks
+        audioTracks.forEach(track => {
+          if (track.audioEl) {
+            track.audioEl.currentTime = video.currentTime - track.startTime / 1000;
+            track.audioEl.play().catch(() => {});
+          }
+        });
         await video.play();
       }
     } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        console.error("Playback error:", err);
-        toast.error("Playback failed. Try clicking play again.");
-      }
+      if ((err as Error).name !== "AbortError") toast.error("Playback failed.");
     }
-  }, [isPlaying, videoObjectUrl]);
+  }, [isPlaying, videoObjectUrl, audioTracks, connectVideoToAudioGraph]);
 
   const handleSeek = useCallback((time: number) => {
     const video = videoRef.current;
@@ -375,34 +359,27 @@ export default function Editor() {
     const clamped = Math.max(0, Math.min(time, duration));
     video.currentTime = clamped;
     setCurrentTime(clamped);
-  }, [duration]);
+    // Sync audio tracks
+    audioTracks.forEach(track => {
+      if (track.audioEl) {
+        const offset = clamped - track.startTime / 1000;
+        if (offset >= 0 && offset < track.duration / 1000) {
+          track.audioEl.currentTime = offset;
+        } else {
+          track.audioEl.pause();
+        }
+      }
+    });
+  }, [duration, audioTracks]);
 
   const handleVolumeChange = useCallback((val: number) => {
     const v = Math.max(0, Math.min(1, val));
-    setVolume(v);
-    setIsMuted(v === 0);
-    if (videoRef.current) {
-      videoRef.current.volume = v;
-      videoRef.current.muted = v === 0;
-    }
+    setVolume(v); setIsMuted(v === 0);
+    if (videoRef.current) { videoRef.current.volume = v; videoRef.current.muted = v === 0; }
+    if (audioGainRef.current) audioGainRef.current.gain.value = v;
   }, []);
 
-  // Debounce ref for history pushes on continuous sliders
-  const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingSnapshotRef = useRef<EditorSnapshot | null>(null);
-
-  const pushHistoryDebounced = useCallback((snapshot: EditorSnapshot) => {
-    // Save the pre-change snapshot only once per drag gesture
-    if (!pendingSnapshotRef.current) pendingSnapshotRef.current = snapshot;
-    if (historyDebounceRef.current) clearTimeout(historyDebounceRef.current);
-    historyDebounceRef.current = setTimeout(() => {
-      if (pendingSnapshotRef.current) {
-        pushHistory(pendingSnapshotRef.current);
-        pendingSnapshotRef.current = null;
-      }
-    }, 600);
-  }, [pushHistory]);
-
+  // ─── Editing Controls ──────────────────────────────────────────────────────
   const handleSpeedChange = useCallback((val: number) => {
     pushHistoryDebounced(captureSnapshot());
     setSpeed(val);
@@ -414,7 +391,6 @@ export default function Editor() {
     setOpacity(Math.max(0, Math.min(1, val)));
   }, [pushHistoryDebounced, captureSnapshot]);
 
-  // ─── Trim & Clips ─────────────────────────────────────────────────────────────
   const handleTrimStart = useCallback((t: number) => {
     pushHistoryDebounced(captureSnapshot());
     setTrimStart(Math.max(0, Math.min(t, trimEnd - 0.1)));
@@ -427,108 +403,323 @@ export default function Editor() {
 
   const createClip = useCallback(() => {
     if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
-    if (trimEnd - trimStart < 0.5) { toast.error("Clip must be at least 0.5 seconds long"); return; }
+    if (trimEnd - trimStart < 0.5) { toast.error("Clip must be at least 0.5 seconds"); return; }
     pushHistory(captureSnapshot());
-
     const clip: TimelineClip = {
-      id: `clip-${Date.now()}`,
-      name: `Clip ${clips.length + 1}`,
-      startTime: trimStart,
-      endTime: trimEnd,
-      type: "video",
-      opacity,
-      speed,
+      id: `clip-${Date.now()}`, name: `Clip ${clips.length + 1}`,
+      startTime: trimStart, endTime: trimEnd, type: "video", opacity, speed,
     };
     setClips(prev => [...prev, clip]);
-    toast.success(`Clip created: ${formatTime(trimStart)} → ${formatTime(trimEnd)}`);
-
+    toast.success(`Clip: ${formatTime(trimStart)} → ${formatTime(trimEnd)}`);
     if (projectDbId) {
-      saveClipMutation.mutate({
-        projectId: projectDbId,
-        name: clip.name,
-        startTime: Math.floor(trimStart * 1000),
-        endTime: Math.floor(trimEnd * 1000),
-        type: "video",
-      });
+      saveClipMutation.mutate({ projectId: projectDbId, name: clip.name,
+        startTime: Math.floor(trimStart * 1000), endTime: Math.floor(trimEnd * 1000), type: "video" });
     }
-  }, [videoObjectUrl, trimStart, trimEnd, clips.length, opacity, speed, projectDbId, saveClipMutation]);
+  }, [videoObjectUrl, trimStart, trimEnd, clips.length, opacity, speed, projectDbId, saveClipMutation, pushHistory, captureSnapshot]);
 
   const removeClip = useCallback((id: string) => {
-    pushHistory(captureSnapshot());
-    setClips(prev => prev.filter(c => c.id !== id));
-    toast.success("Clip removed");
+    pushHistory(captureSnapshot()); setClips(prev => prev.filter(c => c.id !== id));
   }, [pushHistory, captureSnapshot]);
 
-  // ─── Text Overlays ────────────────────────────────────────────────────────────
+  const splitClipAtPlayhead = useCallback(() => {
+    if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
+    if (currentTime <= trimStart + 0.1 || currentTime >= trimEnd - 0.1) {
+      toast.error("Move playhead between trim points to split"); return;
+    }
+    pushHistory(captureSnapshot());
+    const a: TimelineClip = { id: `clip-${Date.now()}-a`, name: `Clip ${clips.length + 1}A`, startTime: trimStart, endTime: currentTime, type: "video", opacity, speed };
+    const b: TimelineClip = { id: `clip-${Date.now()}-b`, name: `Clip ${clips.length + 1}B`, startTime: currentTime, endTime: trimEnd, type: "video", opacity, speed };
+    setClips(prev => [...prev, a, b]);
+    toast.success("Split into 2 clips at playhead");
+  }, [videoObjectUrl, currentTime, trimStart, trimEnd, clips.length, opacity, speed, pushHistory, captureSnapshot]);
+
+  // ─── Text Overlays ─────────────────────────────────────────────────────────
   const addTextOverlay = useCallback(() => {
     if (!newText.trim()) { toast.error("Enter some text first"); return; }
     pushHistory(captureSnapshot());
-    const overlay: TextOverlay = {
-      id: `text-${Date.now()}`,
-      text: newText.trim(),
-      x: 50,
-      y: 80,
-      fontSize,
-      color: textColor,
-    };
-    setTextOverlays(prev => [...prev, overlay]);
-    setNewText("");
-    toast.success("Text overlay added");
-  }, [newText, fontSize, textColor]);
+    setTextOverlays(prev => [...prev, { id: `text-${Date.now()}`, text: newText.trim(), x: 50, y: 80, fontSize, color: textColor }]);
+    setNewText(""); toast.success("Text overlay added");
+  }, [newText, fontSize, textColor, pushHistory, captureSnapshot]);
 
   const removeTextOverlay = useCallback((id: string) => {
-    pushHistory(captureSnapshot());
-    setTextOverlays(prev => prev.filter(t => t.id !== id));
+    pushHistory(captureSnapshot()); setTextOverlays(prev => prev.filter(t => t.id !== id));
   }, [pushHistory, captureSnapshot]);
 
-  // ─── Project Save / Load ──────────────────────────────────────────────────────
+  // ─── Audio Tracks ──────────────────────────────────────────────────────────
+  const handleAddAudioTrack = useCallback(async (file: File) => {
+    const objectUrl = URL.createObjectURL(file);
+    const audioEl = new Audio(objectUrl);
+    audioEl.preload = "metadata";
+
+    await new Promise<void>((resolve) => {
+      audioEl.onloadedmetadata = () => resolve();
+      audioEl.onerror = () => resolve();
+      setTimeout(resolve, 3000);
+    });
+
+    // Connect to AudioContext for mixing
+    try {
+      const ctx = initAudioContext();
+      const source = ctx.createMediaElementSource(audioEl);
+      const gain = ctx.createGain();
+      gain.gain.value = 1;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      const trackId = `audio-${Date.now()}`;
+      audioTrackGainsRef.current.set(trackId, gain);
+
+      const newTrack: AudioTrack = {
+        id: trackId, name: file.name,
+        duration: isFinite(audioEl.duration) ? audioEl.duration * 1000 : 0,
+        volume: 100, startTime: 0, objectUrl, audioEl,
+      };
+      setAudioTracks(prev => [...prev, newTrack]);
+      toast.success(`Audio track added: ${file.name}`);
+    } catch (err) {
+      toast.error("Could not add audio track: " + (err as Error).message);
+      URL.revokeObjectURL(objectUrl);
+    }
+  }, [initAudioContext]);
+
+  const handleRemoveAudioTrack = useCallback((trackId: string) => {
+    setAudioTracks(prev => {
+      const track = prev.find(t => t.id === trackId);
+      if (track) {
+        track.audioEl?.pause();
+        if (track.objectUrl) URL.revokeObjectURL(track.objectUrl);
+        audioTrackGainsRef.current.delete(trackId);
+      }
+      return prev.filter(t => t.id !== trackId);
+    });
+  }, []);
+
+  const handleUpdateAudioTrack = useCallback((trackId: string, volume: number) => {
+    setAudioTracks(prev => prev.map(t => {
+      if (t.id === trackId) {
+        if (t.audioEl) t.audioEl.volume = volume / 100;
+        const gain = audioTrackGainsRef.current.get(trackId);
+        if (gain) gain.gain.value = volume / 100;
+        return { ...t, volume };
+      }
+      return t;
+    }));
+  }, []);
+
+  // Pause audio tracks when video pauses
+  useEffect(() => {
+    if (!isPlaying) {
+      audioTracks.forEach(track => track.audioEl?.pause());
+    }
+  }, [isPlaying, audioTracks]);
+
+  // ─── Scene Detection ───────────────────────────────────────────────────────
+  const detectScenes = useCallback(async () => {
+    if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
+    const video = videoRef.current;
+    if (!video || !isFinite(duration) || duration === 0) { toast.error("Video not ready"); return; }
+
+    setIsDetectingScenes(true);
+    const toastId = toast.loading("Analyzing video for scene cuts...");
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas unavailable");
+      canvas.width = 160; canvas.height = 90;
+
+      const sampleInterval = Math.max(0.5, duration / 200);
+      const detected: SceneMarker[] = [{ id: 0, timestamp: 0, confidence: 1.0 }];
+      let prevHist: number[] | null = null;
+      const THRESHOLD = 22;
+
+      const getHist = (data: ImageData): number[] => {
+        const h = new Array(32).fill(0);
+        for (let i = 0; i < data.data.length; i += 4) {
+          const lum = Math.floor((data.data[i]! * 0.299 + data.data[i + 1]! * 0.587 + data.data[i + 2]! * 0.114) / 8);
+          h[Math.min(31, lum)]++;
+        }
+        return h;
+      };
+
+      const histDiff = (a: number[], b: number[]) =>
+        a.reduce((sum, v, i) => sum + Math.abs(v - (b[i] ?? 0)), 0) / (canvas.width * canvas.height);
+
+      const sampleFrame = (time: number): Promise<number[]> =>
+        new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("Seek timeout")), 5000);
+          video.addEventListener("seeked", () => {
+            clearTimeout(timeout);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            resolve(getHist(ctx.getImageData(0, 0, canvas.width, canvas.height)));
+          }, { once: true });
+          video.currentTime = time;
+        });
+
+      for (let t = sampleInterval; t < duration - sampleInterval; t += sampleInterval) {
+        const hist = await sampleFrame(t);
+        if (prevHist) {
+          const diff = histDiff(prevHist, hist);
+          if (diff > THRESHOLD) {
+            detected.push({ id: detected.length, timestamp: Math.round(t * 1000), confidence: Math.min(1, diff / 80) });
+          }
+        }
+        prevHist = hist;
+      }
+
+      video.currentTime = currentTime;
+      pushHistory(captureSnapshot());
+      setScenes(detected);
+      toast.dismiss(toastId);
+      toast.success(`Found ${detected.length} scene${detected.length !== 1 ? "s" : ""}!`);
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("Scene detection failed: " + (err as Error).message);
+    } finally {
+      setIsDetectingScenes(false);
+    }
+  }, [videoObjectUrl, duration, currentTime, pushHistory, captureSnapshot]);
+
+  // ─── Caption Generation (Fixed: read file directly, no AudioContext) ───────
+  const generateCaptions = useCallback(async () => {
+    if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
+    if (!projectDbId) { toast.error("Save your project first, then generate captions"); return; }
+    const videoFile = videoFileRef.current;
+    if (!videoFile) { toast.error("Video file not available. Re-upload the video."); return; }
+
+    setIsGeneratingCaptions(true);
+    const toastId = toast.loading("Extracting audio track...");
+    try {
+      // Extract audio using OfflineAudioContext — produces a small WAV blob
+      // instead of uploading the full video file (which would be too large)
+      let audioBase64: string;
+      let audioMime: string;
+      try {
+        const arrayBuffer = await videoFile.arrayBuffer();
+        const tempCtx = new AudioContext();
+        const decoded = await tempCtx.decodeAudioData(arrayBuffer);
+        await tempCtx.close();
+
+        const offlineCtx = new OfflineAudioContext(
+          decoded.numberOfChannels,
+          decoded.length,
+          decoded.sampleRate
+        );
+        const src = offlineCtx.createBufferSource();
+        src.buffer = decoded;
+        src.connect(offlineCtx.destination);
+        src.start(0);
+        const rendered = await offlineCtx.startRendering();
+
+        // Encode to WAV
+        const numCh = rendered.numberOfChannels;
+        const sampleRate = rendered.sampleRate;
+        const samples = rendered.length;
+        const wavBuffer = new ArrayBuffer(44 + samples * numCh * 2);
+        const view = new DataView(wavBuffer);
+        const writeStr = (off: number, s: string) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+        writeStr(0, "RIFF"); view.setUint32(4, 36 + samples * numCh * 2, true);
+        writeStr(8, "WAVE"); writeStr(12, "fmt "); view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true); view.setUint16(22, numCh, true);
+        view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * numCh * 2, true);
+        view.setUint16(32, numCh * 2, true); view.setUint16(34, 16, true);
+        writeStr(36, "data"); view.setUint32(40, samples * numCh * 2, true);
+        let offset = 44;
+        for (let i = 0; i < samples; i++) {
+          for (let ch = 0; ch < numCh; ch++) {
+            const s = Math.max(-1, Math.min(1, rendered.getChannelData(ch)[i] ?? 0));
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            offset += 2;
+          }
+        }
+        const wavBlob = new Blob([wavBuffer], { type: "audio/wav" });
+        const b64Reader = new FileReader();
+        audioBase64 = await new Promise<string>((res, rej) => {
+          b64Reader.onload = () => res((b64Reader.result as string).split(",")[1] ?? "");
+          b64Reader.onerror = rej;
+          b64Reader.readAsDataURL(wavBlob);
+        });
+        audioMime = "audio/wav";
+      } catch {
+        // Fallback: send raw video file if audio decode fails (e.g. video has no audio)
+        const reader = new FileReader();
+        audioBase64 = await new Promise<string>((res, rej) => {
+          reader.onload = () => res((reader.result as string).split(",")[1] ?? "");
+          reader.onerror = rej;
+          reader.readAsDataURL(videoFile);
+        });
+        audioMime = videoFile.type || "video/mp4";
+      }
+
+      toast.loading("Uploading for transcription...", { id: toastId });
+
+      const uploaded = await uploadAudioMutation.mutateAsync({
+        projectId: projectDbId,
+        fileName: `audio-${Date.now()}.wav`,
+        fileData: audioBase64,
+        mimeType: audioMime,
+      });
+
+      if (!uploaded?.url) throw new Error("Audio upload failed — no URL returned");
+
+      toast.loading("Transcribing with Whisper AI...", { id: toastId });
+
+      const result = await generateCaptionsMutation.mutateAsync({
+        projectId: projectDbId,
+        audioUrl: uploaded.url,
+        language: "en",
+      });
+
+      if (result.captions && result.captions.length > 0) {
+        pushHistory(captureSnapshot());
+        setCaptions(result.captions.map((c: any, i: number) => ({
+          id: `cap-${Date.now()}-${i}`,
+          startTime: c?.startTime ?? 0,
+          endTime: c?.endTime ?? 0,
+          text: c?.text ?? "",
+        })));
+        toast.dismiss(toastId);
+        toast.success(`Generated ${result.captions.length} caption segments!`);
+      } else if (result.fullText) {
+        pushHistory(captureSnapshot());
+        setCaptions([{ id: `cap-${Date.now()}`, startTime: 0, endTime: duration * 1000, text: result.fullText }]);
+        toast.dismiss(toastId);
+        toast.success("Captions generated!");
+      } else {
+        toast.dismiss(toastId);
+        toast.error("No speech detected in the video.");
+      }
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("Caption generation failed: " + (err as Error).message);
+    } finally {
+      setIsGeneratingCaptions(false);
+    }
+  }, [videoObjectUrl, projectDbId, duration, uploadAudioMutation, generateCaptionsMutation, pushHistory, captureSnapshot]);
+
+  // ─── Project Save / Load ───────────────────────────────────────────────────
   const saveProject = useCallback(async () => {
     if (!projectName.trim()) { toast.error("Enter a project name"); return; }
     const toastId = toast.loading("Saving project...");
     try {
       let dbId = projectDbId;
       if (!dbId) {
-        const created = await createProject.mutateAsync({
-          name: projectName.trim(),
-          description: `${clips.length} clips, ${duration.toFixed(1)}s`,
-        });
-        if (created?.id) {
-          dbId = created.id;
-          setProjectDbId(created.id);
-        }
+        const created = await createProject.mutateAsync({ name: projectName.trim(), description: `${clips.length} clips` });
+        if (created?.id) { dbId = created.id; setProjectDbId(created.id); }
       } else {
-        await updateProject.mutateAsync({
-          projectId: dbId,
-          name: projectName.trim(),
-          duration,
-        });
+        await updateProject.mutateAsync({ projectId: dbId, name: projectName.trim(), duration });
       }
-
-      // Upload video to S3 if we have a file and a project ID
       if (dbId && videoFileRef.current) {
         const file = videoFileRef.current;
         const reader = new FileReader();
         const base64 = await new Promise<string>((resolve, reject) => {
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(",")[1] ?? "");
-          };
+          reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
-        await uploadVideoMutation.mutateAsync({
-          projectId: dbId,
-          fileName: file.name,
-          fileData: base64,
-          mimeType: file.type || "video/mp4",
-        });
+        await uploadVideoMutation.mutateAsync({ projectId: dbId, fileName: file.name, fileData: base64, mimeType: file.type || "video/mp4" });
       }
-
-      toast.dismiss(toastId);
-      toast.success("Project saved!");
+      toast.dismiss(toastId); toast.success("Project saved!");
     } catch {
       toast.dismiss(toastId);
-      // error handled in mutation onError
     }
   }, [projectName, projectDbId, clips.length, duration, createProject, updateProject, uploadVideoMutation]);
 
@@ -537,756 +728,413 @@ export default function Editor() {
     try {
       const full = await utils.projects.getFull.fetch({ projectId: projId });
       if (!full) { toast.dismiss(toastId); toast.error("Project not found"); return; }
-
-      setProjectDbId(full.project.id);
-      setProjectName(full.project.name);
-      if (full.project.duration) setDuration(full.project.duration);
-
-      // Restore clips
+      setProjectDbId(full.project.id); setProjectName(full.project.name);
+      if (full.project.duration) { setDuration(full.project.duration); setTrimEnd(full.project.duration); }
       if (full.clips.length > 0) {
-        setClips(full.clips.map(c => ({
-          id: `clip-${c.id}`,
-          name: c.name,
-          startTime: c.startTime / 1000,
-          endTime: c.endTime / 1000,
-          type: (c.type ?? "video") as "video" | "audio" | "text",
-          opacity: c.opacity ?? 1,
-          speed: c.speed ?? 1,
-        })));
-        if (full.project.duration) setTrimEnd(full.project.duration);
+        setClips(full.clips.map(c => ({ id: `clip-${c.id}`, name: c.name, startTime: c.startTime / 1000, endTime: c.endTime / 1000, type: (c.type ?? "video") as "video" | "audio" | "text", opacity: c.opacity ?? 1, speed: c.speed ?? 1 })));
       }
-
-      // Restore scene markers
       if (full.scenes.length > 0) {
-        setScenes(full.scenes.map(s => ({
-          id: s.id,
-          timestamp: s.timestamp,
-          confidence: s.confidence ?? 0.5,
-        })));
+        setScenes(full.scenes.map(s => ({ id: s.id, timestamp: s.timestamp, confidence: s.confidence ?? 0.5 })));
       }
-
-      // Restore video from S3 if available
       if (full.project.videoUrl) {
         try {
           const resp = await fetch(full.project.videoUrl);
           if (resp.ok) {
             const blob = await resp.blob();
             if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
-            const url = URL.createObjectURL(blob);
-            setVideoObjectUrl(url);
+            audioSourceRef.current = null; audioGainRef.current = null;
+            setVideoObjectUrl(URL.createObjectURL(blob));
             setIsVideoLoading(true);
           }
-        } catch {
-          toast.error("Could not restore video from storage. Please re-upload.");
-        }
+        } catch { toast.error("Could not restore video. Please re-upload."); }
       }
-
-      setShowProjects(false);
-      toast.dismiss(toastId);
-      toast.success(`Loaded: ${full.project.name}`);
+      setShowProjects(false); toast.dismiss(toastId); toast.success(`Loaded: ${full.project.name}`);
     } catch (err) {
-      toast.dismiss(toastId);
-      toast.error("Failed to load project: " + (err as Error).message);
+      toast.dismiss(toastId); toast.error("Failed to load: " + (err as Error).message);
     }
   }, [utils, videoObjectUrl]);
 
-  const handleDeleteProject = useCallback(async (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await deleteProject.mutateAsync({ projectId: id });
-      if (projectDbId === id) {
-        setProjectDbId(null);
-        setProjectName("Untitled Project");
-      }
-    } catch {
-      // error handled in mutation onError
-    }
-  }, [deleteProject, projectDbId]);
-
-  // ─── Scene Detection ──────────────────────────────────────────────────────────
-  const detectScenes = useCallback(async () => {
-    if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
-    const video = videoRef.current;
-    if (!video || !isFinite(duration) || duration === 0) {
-      toast.error("Video not ready yet");
-      return;
-    }
-
-    setIsDetectingScenes(true);
-    const toastId = toast.loading("Analyzing video for scene cuts...");
+  // ─── Chatbot ───────────────────────────────────────────────────────────────
+  const sendChatMessage = useCallback(async () => {
+    const msg = chatInput.trim();
+    if (!msg || isChatLoading) return;
+    setChatInput("");
+    setChatMessages(prev => [...prev, { role: "user", text: msg }]);
+    setIsChatLoading(true);
 
     try {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas 2D context unavailable");
+      const result = await chatbotMutation.mutateAsync({
+        message: msg,
+        context: {
+          hasVideo: !!videoObjectUrl,
+          duration: Math.round(duration),
+          currentTime: Math.round(currentTime),
+          clipCount: clips.length,
+          captionCount: captions.length,
+          trimStart: Math.round(trimStart * 10) / 10,
+          trimEnd: Math.round(trimEnd * 10) / 10,
+          speed,
+          opacity,
+        },
+      });
 
-      canvas.width = 160;
-      canvas.height = 90;
-
-      // Sample up to 200 frames across the video
-      const sampleInterval = Math.max(0.5, duration / 200);
-      const detectedScenes: SceneMarker[] = [{ id: 0, timestamp: 0, confidence: 1.0 }];
-      let prevHistogram: number[] | null = null;
-      const THRESHOLD = 25;
-
-      const getHistogram = (imageData: ImageData): number[] => {
-        const hist = new Array(16).fill(0);
-        for (let i = 0; i < imageData.data.length; i += 4) {
-          const brightness = Math.floor(
-            (imageData.data[i] * 0.299 + imageData.data[i + 1] * 0.587 + imageData.data[i + 2] * 0.114) / 16
-          );
-          hist[Math.min(15, brightness)]++;
+      // Apply the command
+      if (result.action) {
+        const { action, params } = result;
+        switch (action) {
+          case "trim":
+            if (params?.start !== undefined && params.start !== null) { handleTrimStart(Number(params.start)); }
+            if (params?.end !== undefined && params.end !== null) { handleTrimEnd(Number(params.end)); }
+            break;
+          case "speed":
+            if (params?.speed !== undefined) handleSpeedChange(Number(params.speed));
+            break;
+          case "opacity":
+            if (params?.opacity !== undefined) handleOpacityChange(Number(params.opacity));
+            break;
+          case "seek":
+            if (params?.time !== undefined && params.time !== null) handleSeek(Number(params.time));
+            break;
+          case "play":
+            if (!isPlaying) handlePlayPause();
+            break;
+          case "pause":
+            if (isPlaying) handlePlayPause();
+            break;
+          case "detect_scenes":
+            detectScenes();
+            break;
+          case "generate_captions":
+            generateCaptions();
+            break;
+          case "create_clip":
+            createClip();
+            break;
+          case "split":
+            splitClipAtPlayhead();
+            break;
+          case "export":
+            setShowExportDialog(true);
+            break;
+          case "add_text":
+            if (params?.text) { setNewText(String(params.text)); setActivePanel("text"); }
+            break;
+          case "switch_panel":
+            if (params?.panel) setActivePanel(params.panel as any);
+            break;
         }
-        return hist;
-      };
-
-      const histDiff = (a: number[], b: number[]): number =>
-        a.reduce((sum, v, i) => sum + Math.abs(v - (b[i] ?? 0)), 0) / (canvas.width * canvas.height);
-
-      const sampleFrame = (time: number): Promise<number[]> =>
-        new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error("Frame seek timeout")), 5000);
-          const onSeeked = () => {
-            clearTimeout(timeout);
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            resolve(getHistogram(imageData));
-          };
-          video.addEventListener("seeked", onSeeked, { once: true });
-          video.currentTime = time;
-        });
-
-      for (let t = sampleInterval; t < duration - sampleInterval; t += sampleInterval) {
-        const hist = await sampleFrame(t);
-        if (prevHistogram) {
-          const diff = histDiff(prevHistogram, hist);
-          if (diff > THRESHOLD) {
-            detectedScenes.push({
-              id: detectedScenes.length,
-              timestamp: Math.round(t * 1000),
-              confidence: Math.min(1, diff / 100),
-            });
-          }
-        }
-        prevHistogram = hist;
       }
 
-      // Restore playhead
-      video.currentTime = currentTime;
-      setScenes(detectedScenes);
-      toast.dismiss(toastId);
-      toast.success(`Found ${detectedScenes.length} scene${detectedScenes.length !== 1 ? "s" : ""}!`);
+      setChatMessages(prev => [...prev, { role: "assistant", text: result.message ?? "Done!" }]);
     } catch (err) {
-      console.error("Scene detection error:", err);
-      toast.dismiss(toastId);
-      toast.error("Scene detection failed: " + (err as Error).message);
+      setChatMessages(prev => [...prev, { role: "assistant", text: "Sorry, I couldn't process that command. Try again." }]);
     } finally {
-      setIsDetectingScenes(false);
+      setIsChatLoading(false);
     }
-  }, [videoObjectUrl, duration, currentTime]);
+  }, [chatInput, isChatLoading, videoObjectUrl, duration, currentTime, clips, captions, scenes, trimStart, trimEnd, speed, opacity, isPlaying, chatbotMutation, handleTrimStart, handleTrimEnd, handleSpeedChange, handleOpacityChange, handleSeek, handlePlayPause, detectScenes, generateCaptions, createClip, splitClipAtPlayhead]);
 
-  // ─── Split Clip at Playhead ───────────────────────────────────────────────────
-  const splitClipAtPlayhead = useCallback(() => {
-    if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
-    if (currentTime <= trimStart + 0.1 || currentTime >= trimEnd - 0.1) {
-      toast.error("Move the playhead between the trim start and end points to split");
-      return;
-    }
-    const clipA: TimelineClip = {
-      id: `clip-${Date.now()}-a`,
-      name: `Clip ${clips.length + 1}A`,
-      startTime: trimStart,
-      endTime: currentTime,
-      type: "video",
-      opacity,
-      speed,
-    };
-    const clipB: TimelineClip = {
-      id: `clip-${Date.now()}-b`,
-      name: `Clip ${clips.length + 1}B`,
-      startTime: currentTime,
-      endTime: trimEnd,
-      type: "video",
-      opacity,
-      speed,
-    };
-    setClips(prev => [...prev, clipA, clipB]);
-    toast.success(`Split into 2 clips at ${formatTime(currentTime)}`);
-  }, [videoObjectUrl, currentTime, trimStart, trimEnd, clips.length, opacity, speed]);
+  // Scroll chat to bottom
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
-  // ─── Export Full Video ────────────────────────────────────────────────────────
-  const exportVideo = useCallback(() => {
-    if (!videoObjectUrl) { toast.error("No video to export"); return; }
-    setShowExportDialog(true);
-  }, [videoObjectUrl]);
-
-  // ─── Export Trimmed Clip via MediaRecorder ────────────────────────────────────
-  const exportClip = useCallback(async (clip: TimelineClip) => {
-    const video = videoRef.current;
-    if (!video || !videoObjectUrl) { toast.error("Video not loaded"); return; }
-    if (isExporting) { toast.error("Export already in progress"); return; }
-
-    setIsExporting(true);
-    setExportingClipId(clip.id);
-    setExportProgress(0);
-
-    const toastId = toast.loading(`Exporting "${clip.name}"...`);
-
-    try {
-      await exportTrimmedClip(
-        video,
-        clip.startTime,
-        clip.endTime,
-        clip.name,
-        (pct) => setExportProgress(pct)
-      );
-      toast.dismiss(toastId);
-      toast.success(`"${clip.name}" exported successfully!`);
-    } catch (err) {
-      toast.dismiss(toastId);
-      const msg = (err as Error).message;
-      if (msg.includes("captureStream not supported")) {
-        // Fallback: download the original video with a note
-        toast.error("Direct clip export not supported in this browser. Downloading full video instead.");
-        exportVideo();
-      } else {
-        toast.error("Export failed: " + msg);
-      }
-    } finally {
-      setIsExporting(false);
-      setExportingClipId(null);
-      setExportProgress(0);
-      // Restore video state
-      if (video) {
-        video.playbackRate = speed;
-        video.muted = isMuted;
-        video.volume = volume;
-      }
-    }
-  }, [videoObjectUrl, isExporting, exportVideo, speed, isMuted, volume]);
-
-  // ─── Keyboard Shortcuts ───────────────────────────────────────────────────────
+  // ─── Keyboard Shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.code === "Space") { e.preventDefault(); handlePlayPause(); }
-      if (e.code === "ArrowLeft") { e.preventDefault(); handleSeek(currentTime - 5); }
-      if (e.code === "ArrowRight") { e.preventDefault(); handleSeek(currentTime + 5); }
-      if (e.code === "KeyM") handleVolumeChange(isMuted ? 1 : 0);
-      if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ" && !e.shiftKey) { e.preventDefault(); undo(); }
-      if ((e.ctrlKey || e.metaKey) && (e.code === "KeyY" || (e.code === "KeyZ" && e.shiftKey))) { e.preventDefault(); redo(); }
-      if (e.code === "BracketLeft") handleTrimStart(currentTime);
-      if (e.code === "BracketRight") handleTrimEnd(currentTime);
+      if (e.key === " ") { e.preventDefault(); handlePlayPause(); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); handleSeek(currentTime - 5); }
+      if (e.key === "ArrowRight") { e.preventDefault(); handleSeek(currentTime + 5); }
+      if (e.key === "m" || e.key === "M") { setIsMuted(v => { const next = !v; if (videoRef.current) videoRef.current.muted = next; return next; }); }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+      if (e.key === "[") handleTrimStart(currentTime);
+      if (e.key === "]") handleTrimEnd(currentTime);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [handlePlayPause, handleSeek, handleVolumeChange, handleTrimStart, handleTrimEnd, currentTime, isMuted]);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handlePlayPause, handleSeek, currentTime, undo, redo, handleTrimStart, handleTrimEnd]);
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────────
-  const formatTime = (t: number) => {
-    if (!t || !isFinite(t)) return "0:00";
-    const m = Math.floor(t / 60);
-    const s = Math.floor(t % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
+  // ─── Active caption at current time ───────────────────────────────────────
+  const activeCaption = showCaptions
+    ? captions.find(c => currentTime * 1000 >= c.startTime && currentTime * 1000 <= c.endTime)
+    : null;
 
-  // ─── Auth Guard ───────────────────────────────────────────────────────────────
+  // ─── Render ────────────────────────────────────────────────────────────────
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <div className="p-8 max-w-md text-center">
-          <Film className="w-12 h-12 text-accent mx-auto mb-4" />
-          <h1 className="text-2xl font-bold mb-4">Sign in to use PixelCraft</h1>
-          <p className="text-muted-foreground mb-6">You need to be logged in to access the editor and save your projects.</p>
-          <Link href="/">
-            <Button variant="default" className="w-full">Back to Home</Button>
-          </Link>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Film className="w-12 h-12 text-accent mx-auto" />
+          <h2 className="text-xl font-bold">Sign in to use PixelCraft Editor</h2>
+          <p className="text-muted-foreground text-sm">Your projects are saved to your account.</p>
+          <Link href="/"><Button variant="outline">← Back to Home</Button></Link>
         </div>
       </div>
     );
   }
 
+  const panelTabs = [
+    { id: "edit", icon: <Scissors className="w-3.5 h-3.5" />, label: "Edit" },
+    { id: "ai", icon: <Zap className="w-3.5 h-3.5" />, label: "AI" },
+    { id: "text", icon: <Type className="w-3.5 h-3.5" />, label: "Text" },
+    { id: "effects", icon: <Music className="w-3.5 h-3.5" />, label: "Audio" },
+    { id: "color", icon: <Palette className="w-3.5 h-3.5" />, label: "Color" },
+    { id: "chat", icon: <MessageSquare className="w-3.5 h-3.5" />, label: "AI Chat" },
+  ] as const;
+
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col overflow-hidden" style={{ height: "100vh" }}>
-
+    <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden">
       {/* ── Header ── */}
-      <header className="flex-shrink-0 border-b border-border bg-card/60 backdrop-blur-sm z-40">
-        <div className="px-4 py-2 flex items-center gap-3">
-          <Link href="/">
-            <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity mr-2">
-              <div className="w-6 h-6 bg-accent rounded flex items-center justify-center text-accent-foreground text-xs font-bold">P</div>
-              <span className="font-bold text-sm">PixelCraft</span>
-            </div>
-          </Link>
+      <header className="flex-shrink-0 h-12 bg-card border-b border-border flex items-center px-4 gap-3">
+        <Link href="/" className="flex items-center gap-2 mr-2">
+          <div className="w-6 h-6 bg-accent rounded flex items-center justify-center text-accent-foreground text-xs font-bold">P</div>
+          <span className="font-bold text-sm hidden sm:block">PixelCraft</span>
+        </Link>
 
-          <div className="h-4 w-px bg-border" />
-
+        <div className="flex-1 flex items-center gap-2">
           <input
-            type="text"
             value={projectName}
             onChange={e => setProjectName(e.target.value)}
-            className="bg-transparent border-none outline-none text-sm font-medium w-48 focus:bg-card/50 focus:px-2 rounded transition-all"
+            className="bg-transparent text-sm font-medium focus:outline-none focus:ring-1 focus:ring-accent rounded px-2 py-0.5 max-w-[200px]"
             placeholder="Project name"
           />
-
-          {projectDbId && (
-            <span className="text-xs text-accent bg-accent/10 px-2 py-0.5 rounded-full">Saved</span>
-          )}
-
-          <div className="flex-1" />
-
-          {isExporting && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
-              <span>Exporting {exportProgress}%</span>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
-            {/* Undo/Redo */}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={undo}
-              disabled={!canUndo}
-              className="h-8 w-8 p-0"
-              title="Undo (Ctrl+Z)"
-            >
-              <Undo2 className="w-3.5 h-3.5" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={redo}
-              disabled={!canRedo}
-              className="h-8 w-8 p-0"
-              title="Redo (Ctrl+Y)"
-            >
-              <Redo2 className="w-3.5 h-3.5" />
-            </Button>
-            <div className="w-px h-5 bg-border mx-1" />
-            <Button size="sm" variant="outline" onClick={() => setShowProjects(!showProjects)} className="gap-2 h-8 text-xs">
+          <div className="relative">
+            <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 px-2" onClick={() => setShowProjects(v => !v)}>
               <FolderOpen className="w-3.5 h-3.5" />
-              Projects
+              <ChevronDown className="w-3 h-3" />
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={saveProject}
-              disabled={createProject.isPending || updateProject.isPending}
-              className="gap-2 h-8 text-xs"
-            >
-              {(createProject.isPending || updateProject.isPending)
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : <Save className="w-3.5 h-3.5" />}
-              Save
-            </Button>
-            <Button size="sm" variant="default" onClick={exportVideo} disabled={!videoObjectUrl} className="gap-2 h-8 text-xs">
-              <Download className="w-3.5 h-3.5" />
-              Export
-            </Button>
-
-            {showExportDialog && (
-              <ExportDialog
-                open={showExportDialog}
-                onClose={() => setShowExportDialog(false)}
-                videoRef={videoRef}
-                videoObjectUrl={videoObjectUrl}
-                projectName={projectName}
-                clips={clips}
-                duration={duration}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Projects Dropdown */}
-        {showProjects && (
-          <div className="border-t border-border bg-card/95 px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Saved Projects</h3>
-              <button onClick={() => setShowProjects(false)}><X className="w-4 h-4 text-muted-foreground" /></button>
-            </div>
-            {isLoadingProjects ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> Loading projects...
-              </div>
-            ) : projectListError ? (
-              <div className="flex items-center gap-2 text-sm text-destructive py-2">
-                <AlertCircle className="w-4 h-4" /> Failed to load projects
-              </div>
-            ) : !projectList?.length ? (
-              <p className="text-sm text-muted-foreground py-2">No saved projects yet. Click Save to create one.</p>
-            ) : (
-              <div className="flex gap-2 flex-wrap max-h-32 overflow-y-auto">
-                {projectList.map(proj => (
-                  <div
-                    key={proj.id}
-                    onClick={() => loadProjectFromDb(proj.id, proj.name)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded border cursor-pointer hover:bg-accent/10 transition-colors text-sm ${projectDbId === proj.id ? "border-accent bg-accent/10" : "border-border"}`}
-                  >
-                    <Film className="w-3.5 h-3.5 text-accent" />
-                    <span className="font-medium">{proj.name}</span>
-                    {proj.duration != null && <span className="text-xs text-muted-foreground">{formatTime(proj.duration)}</span>}
-                    <button
-                      onClick={e => handleDeleteProject(proj.id, e)}
-                      disabled={deleteProject.isPending}
-                      className="ml-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                    >
-                      {deleteProject.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+            {showProjects && (
+              <div className="absolute top-8 left-0 z-50 bg-card border border-border rounded-lg shadow-xl w-64 max-h-72 overflow-y-auto">
+                <div className="p-2 border-b border-border">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2">Your Projects</p>
+                </div>
+                {projectList?.length === 0 && <p className="text-xs text-muted-foreground p-4 text-center">No saved projects yet</p>}
+                {projectList?.map(p => (
+                  <div key={p.id} className="flex items-center gap-2 px-3 py-2 hover:bg-accent/10 cursor-pointer group" onClick={() => loadProjectFromDb(p.id, p.name)}>
+                    <Film className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{p.name}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(p.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <button onClick={e => { e.stopPropagation(); deleteProject.mutate({ projectId: p.id }); if (projectDbId === p.id) { setProjectDbId(null); setProjectName("Untitled Project"); } }} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all">
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)"><Undo2 className="w-3.5 h-3.5" /></Button>
+          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)"><Redo2 className="w-3.5 h-3.5" /></Button>
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setShowExportDialog(true)} disabled={!videoObjectUrl}>
+            <Download className="w-3.5 h-3.5" /> Export
+          </Button>
+          <Button size="sm" variant="default" className="h-7 px-2 text-xs gap-1 bg-accent hover:bg-accent/90 text-accent-foreground" onClick={saveProject} disabled={!videoObjectUrl}>
+            <Save className="w-3.5 h-3.5" /> Save
+          </Button>
+        </div>
       </header>
 
-      {/* ── Main Content ── */}
+      {/* ── Main Area ── */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* ── Left: Preview + Clips ── */}
-        <div className="flex-1 flex flex-col overflow-hidden border-r border-border">
-
-          {/* Video Preview */}
-          <div className="flex-1 flex items-center justify-center bg-black/90 relative overflow-hidden" ref={videoContainerRef}>
-            {videoObjectUrl ? (
+        {/* ── Video Preview ── */}
+        <div className="flex-1 flex flex-col bg-black min-w-0">
+          {/* Video */}
+          <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+            {!videoObjectUrl ? (
+              <label className="cursor-pointer flex flex-col items-center gap-3 text-muted-foreground hover:text-foreground transition-colors group">
+                <div className="w-16 h-16 rounded-full border-2 border-dashed border-muted-foreground group-hover:border-accent transition-colors flex items-center justify-center">
+                  <Upload className="w-7 h-7" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium">Upload a video to start editing</p>
+                  <p className="text-sm text-muted-foreground mt-1">MP4, WebM, MOV — up to 500 MB</p>
+                </div>
+                <input type="file" accept="video/mp4,video/webm,video/quicktime,video/*" className="hidden" onChange={handleVideoUpload} />
+              </label>
+            ) : (
               <>
                 <video
                   ref={videoRef}
                   src={videoObjectUrl}
-                  className="max-w-full max-h-full"
-                  style={{ opacity }}
-                  onTimeUpdate={handleTimeUpdate}
+                  className="max-w-full max-h-full object-contain"
+                  style={{ opacity, filter: `brightness(${1 + effects.brightness / 100}) contrast(${1 + effects.contrast / 100}) saturate(${1 + effects.saturation / 100}) hue-rotate(${effects.hue}deg) blur(${effects.blur}px) grayscale(${effects.grayscale / 100}) sepia(${effects.sepia / 100})` }}
                   onLoadedMetadata={handleLoadedMetadata}
-                  onEnded={handleVideoEnded}
-                  onError={handleVideoError}
+                  onTimeUpdate={handleTimeUpdate}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
-                  onWaiting={() => setIsVideoLoading(true)}
-                  onCanPlay={() => setIsVideoLoading(false)}
-                  preload="metadata"
+                  onEnded={handleVideoEnded}
+                  onError={handleVideoError}
+                  playsInline
                 />
-                {/* Caption Rendering */}
-                {showCaptions && captions.length > 0 && (() => {
-                  const currentMs = currentTime * 1000;
-                  const activeCap = captions.find(c => currentMs >= c.startTime && currentMs <= c.endTime);
-                  return activeCap ? (
-                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 max-w-[90%] pointer-events-none select-none">
-                      <div
-                        className="px-3 py-1.5 rounded text-white font-medium text-center"
-                        style={{
-                          fontSize: "clamp(14px, 2.5vw, 22px)",
-                          background: "rgba(0,0,0,0.75)",
-                          textShadow: "0 1px 4px rgba(0,0,0,0.9)",
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {activeCap.text}
-                      </div>
-                    </div>
-                  ) : null;
-                })()}
-
-                {/* Text Overlays */}
+                {isVideoLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                    <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                  </div>
+                )}
+                {/* Caption overlay */}
+                {activeCaption && (
+                  <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/75 text-white text-sm px-4 py-1.5 rounded-md max-w-[80%] text-center pointer-events-none">
+                    {activeCaption.text}
+                  </div>
+                )}
+                {/* Text overlays */}
                 {textOverlays.map(overlay => (
-                  <div
-                    key={overlay.id}
-                    className="absolute pointer-events-none select-none font-bold drop-shadow-lg"
-                    style={{
-                      left: `${overlay.x}%`,
-                      top: `${overlay.y}%`,
-                      transform: "translate(-50%, -50%)",
-                      fontSize: `${overlay.fontSize}px`,
-                      color: overlay.color,
-                      textShadow: "0 2px 8px rgba(0,0,0,0.8)",
-                    }}
-                  >
+                  <div key={overlay.id} className="absolute pointer-events-none" style={{ left: `${overlay.x}%`, top: `${overlay.y}%`, transform: "translate(-50%, -50%)", fontSize: `${overlay.fontSize}px`, color: overlay.color, textShadow: "0 1px 3px rgba(0,0,0,0.8)", fontWeight: "bold", whiteSpace: "nowrap" }}>
                     {overlay.text}
                   </div>
                 ))}
-                {(isVideoLoading || isExporting) && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 gap-2">
-                    <Loader2 className="w-8 h-8 animate-spin text-accent" />
-                    {isExporting && <span className="text-sm text-white">{exportProgress}%</span>}
-                  </div>
-                )}
               </>
-            ) : (
-              <label className="cursor-pointer flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-border hover:border-accent transition-colors group">
-                <Upload className="w-10 h-10 text-muted-foreground group-hover:text-accent transition-colors" />
-                <div className="text-center">
-                  <p className="font-medium">Click to upload video</p>
-                  <p className="text-sm text-muted-foreground mt-1">MP4, WebM, MOV — up to 500 MB</p>
-                </div>
-                <input type="file" accept="video/mp4,video/webm,video/quicktime,.mov" onChange={handleVideoUpload} className="hidden" />
-              </label>
             )}
           </div>
 
           {/* Playback Controls */}
           {videoObjectUrl && (
             <div className="flex-shrink-0 bg-card/80 border-t border-border px-4 py-2 space-y-2">
-              {/* Seek Bar */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground font-mono w-10">{formatTime(currentTime)}</span>
-                <div className="flex-1 relative">
-                  <input
-                    type="range"
-                    min={0}
-                    max={duration || 1}
-                    step={0.05}
-                    value={currentTime}
-                    onChange={e => handleSeek(parseFloat(e.target.value))}
-                    className="w-full h-1.5 accent-green-500 cursor-pointer"
-                  />
-                  {/* Trim region indicator */}
-                  {duration > 0 && (
-                    <div
-                      className="absolute top-0 h-1.5 bg-accent/30 pointer-events-none rounded"
-                      style={{
-                        left: `${(trimStart / duration) * 100}%`,
-                        width: `${((trimEnd - trimStart) / duration) * 100}%`,
-                      }}
-                    />
-                  )}
+              {/* Progress bar */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="w-10 text-right font-mono">{formatTime(currentTime)}</span>
+                <div className="flex-1 relative h-2 bg-border rounded-full cursor-pointer group" onClick={e => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  handleSeek(((e.clientX - rect.left) / rect.width) * duration);
+                }}>
+                  {/* Trim range */}
+                  <div className="absolute h-full bg-accent/20 rounded-full" style={{ left: `${(trimStart / duration) * 100}%`, width: `${((trimEnd - trimStart) / duration) * 100}%` }} />
+                  {/* Playhead */}
+                  <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-accent rounded-full -translate-x-1/2 shadow-md" style={{ left: `${(currentTime / duration) * 100}%` }} />
+                  <div className="absolute h-full bg-accent/60 rounded-full" style={{ width: `${(currentTime / duration) * 100}%` }} />
                 </div>
-                <span className="text-xs text-muted-foreground font-mono w-10 text-right">{formatTime(duration)}</span>
+                <span className="w-10 font-mono">{formatTime(duration)}</span>
               </div>
 
-              {/* Buttons */}
+              {/* Controls row */}
               <div className="flex items-center gap-3">
-                <button
-                  onClick={handlePlayPause}
-                  className="w-8 h-8 rounded-full bg-accent flex items-center justify-center hover:bg-accent/80 transition-colors active:scale-95"
-                >
-                  {isPlaying ? <Pause className="w-4 h-4 text-accent-foreground" /> : <Play className="w-4 h-4 text-accent-foreground ml-0.5" />}
+                <button onClick={handlePlayPause} className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-accent-foreground hover:bg-accent/90 transition-colors flex-shrink-0">
+                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
                 </button>
-
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => handleVolumeChange(isMuted ? 1 : 0)}>
-                    <Volume2 className={`w-3.5 h-3.5 ${isMuted ? "text-muted-foreground/40" : "text-muted-foreground"}`} />
+                  <button onClick={() => { setIsMuted(v => { const next = !v; if (videoRef.current) videoRef.current.muted = next; return next; })} } className="text-muted-foreground hover:text-foreground transition-colors">
+                    {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                   </button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={volume}
-                    onChange={e => handleVolumeChange(parseFloat(e.target.value))}
-                    className="w-20 h-1 accent-green-500 cursor-pointer"
-                  />
+                  <input type="range" min={0} max={1} step={0.05} value={isMuted ? 0 : volume} onChange={e => handleVolumeChange(Number(e.target.value))} className="w-20 h-1 accent-accent" />
                 </div>
-
-                <div className="flex items-center gap-1.5 ml-auto">
-                  <span className="text-xs text-muted-foreground">Speed:</span>
+                <div className="flex items-center gap-1.5 ml-auto text-xs text-muted-foreground">
+                  <span>Speed:</span>
                   {[0.5, 1, 1.5, 2].map(s => (
-                    <button
-                      key={s}
-                      onClick={() => handleSpeedChange(s)}
-                      className={`text-xs px-2 py-0.5 rounded transition-colors ${speed === s ? "bg-accent text-accent-foreground" : "bg-card text-muted-foreground hover:bg-accent/20"}`}
-                    >
-                      {s}x
-                    </button>
+                    <button key={s} onClick={() => handleSpeedChange(s)} className={`px-1.5 py-0.5 rounded text-xs transition-colors ${speed === s ? "bg-accent text-accent-foreground" : "hover:bg-accent/20"}`}>{s}x</button>
                   ))}
                 </div>
-
-                <span className="hidden lg:block text-xs text-muted-foreground ml-2 opacity-60">
-                  Space=play · ←→=seek · M=mute · [=trim start · ]=trim end
-                </span>
               </div>
             </div>
           )}
-
-          {/* Clips List */}
-          <div className="flex-shrink-0 border-t border-border bg-card/30 max-h-40 overflow-y-auto">
-            <div className="px-4 py-2 flex items-center justify-between sticky top-0 bg-card/80 backdrop-blur-sm">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Clips ({clips.length})</h3>
-              {clips.length > 0 && <span className="text-xs text-muted-foreground">Click to jump · Download to export</span>}
-            </div>
-            {clips.length === 0 ? (
-              <p className="text-xs text-muted-foreground px-4 pb-3">No clips yet. Set trim points in the Edit panel and click Create Clip.</p>
-            ) : (
-              <div className="px-4 pb-2 flex gap-2 flex-wrap">
-                {clips.map(clip => (
-                  <div
-                    key={clip.id}
-                    className="flex items-center gap-2 bg-card border border-border rounded px-3 py-1.5 text-xs hover:border-accent transition-colors cursor-pointer group"
-                    onClick={() => handleSeek(clip.startTime)}
-                  >
-                    <Film className="w-3 h-3 text-accent flex-shrink-0" />
-                    <span className="font-medium">{clip.name}</span>
-                    <span className="text-muted-foreground">{formatTime(clip.startTime)}–{formatTime(clip.endTime)}</span>
-                    <span className="text-muted-foreground">{clip.speed}x</span>
-                    <button
-                      onClick={e => { e.stopPropagation(); exportClip(clip); }}
-                      disabled={isExporting}
-                      className="text-muted-foreground hover:text-accent transition-colors disabled:opacity-40"
-                      title="Export this clip"
-                    >
-                      {exportingClipId === clip.id
-                        ? <Loader2 className="w-3 h-3 animate-spin" />
-                        : <Download className="w-3 h-3" />}
-                    </button>
-                    <button
-                      onClick={e => { e.stopPropagation(); removeClip(clip.id); }}
-                      className="text-muted-foreground hover:text-destructive transition-colors"
-                      title="Remove clip"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* ── Right: Tools Panel ── */}
-        <div className="w-72 flex flex-col overflow-hidden bg-card/20">
+        {/* ── Right Panel ── */}
+        <div className="w-64 flex-shrink-0 flex flex-col border-l border-border bg-card overflow-hidden">
           {/* Panel Tabs */}
-          <div className="flex border-b border-border">
-            {(["edit", "ai", "text", "effects"] as const).map(panel => (
-              <button
-                key={panel}
-                onClick={() => setActivePanel(panel)}
-                className={`flex-1 py-2.5 text-xs font-medium capitalize transition-colors ${activePanel === panel ? "border-b-2 border-accent text-accent" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                {panel === "edit" ? "Edit" : panel === "ai" ? "AI" : panel === "text" ? "Text" : "Effects"}
-              </button>
-            ))}
+          <div className="flex-shrink-0 border-b border-border">
+            <div className="grid grid-cols-3 gap-0">
+              {panelTabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActivePanel(tab.id)}
+                  className={`flex flex-col items-center gap-0.5 py-2 text-xs transition-colors ${activePanel === tab.id ? "text-accent border-b-2 border-accent" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {tab.icon}
+                  <span className="text-[10px]">{tab.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-5">
+          {/* Panel Content */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-4 text-sm">
 
             {/* ── Edit Panel ── */}
             {activePanel === "edit" && (
               <>
-                {/* Trim */}
+                {/* Upload */}
                 <div>
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <Scissors className="w-3.5 h-3.5" /> Trim & Create Clip
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs text-muted-foreground">Start (s)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={duration}
-                          step={0.1}
-                          value={trimStart.toFixed(1)}
-                          onChange={e => handleTrimStart(parseFloat(e.target.value) || 0)}
-                          className="w-full bg-background border border-border rounded px-2 py-1 text-sm font-mono mt-1"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">End (s)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={duration}
-                          step={0.1}
-                          value={trimEnd.toFixed(1)}
-                          onChange={e => handleTrimEnd(parseFloat(e.target.value) || duration)}
-                          className="w-full bg-background border border-border rounded px-2 py-1 text-sm font-mono mt-1"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-8"
-                        onClick={() => handleTrimStart(currentTime)}
-                        disabled={!videoObjectUrl}
-                        title="Set trim start to current playhead position [ "
-                      >
-                        [ Set Start
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-8"
-                        onClick={() => handleTrimEnd(currentTime)}
-                        disabled={!videoObjectUrl}
-                        title="Set trim end to current playhead position ]"
-                      >
-                        Set End ]
-                      </Button>
-                    </div>
-                    {duration > 0 && (
-                      <div className="text-xs text-muted-foreground text-center">
-                        Duration: <span className="text-accent font-mono">{formatTime(trimEnd - trimStart)}</span>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="h-8 text-xs gap-1"
-                        onClick={createClip}
-                        disabled={!videoObjectUrl}
-                      >
-                        <Plus className="w-3 h-3" /> Create Clip
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs gap-1"
-                        onClick={splitClipAtPlayhead}
-                        disabled={!videoObjectUrl}
-                        title="Split trim region at current playhead position"
-                      >
-                        <SplitSquareHorizontal className="w-3 h-3" /> Split
-                      </Button>
-                    </div>
-                  </div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Video</label>
+                  <label className="flex items-center gap-2 cursor-pointer w-full border border-dashed border-border rounded-lg p-2 hover:border-accent hover:bg-accent/5 transition-colors text-xs text-muted-foreground">
+                    <Upload className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="truncate">{videoObjectUrl ? (videoFileRef.current?.name ?? "Video loaded") : "Upload video"}</span>
+                    <input type="file" accept="video/mp4,video/webm,video/quicktime,video/*" className="hidden" onChange={handleVideoUpload} />
+                  </label>
                 </div>
 
-                {/* Speed */}
+                {/* Trim */}
                 <div>
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Playback Speed</h3>
-                  <div className="space-y-2">
-                    <input
-                      type="range"
-                      min={0.25}
-                      max={2}
-                      step={0.05}
-                      value={speed}
-                      onChange={e => handleSpeedChange(parseFloat(e.target.value))}
-                      className="w-full accent-green-500"
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>0.25x</span>
-                      <span className="text-accent font-bold">{speed.toFixed(2)}x</span>
-                      <span>2x</span>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Trim</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Start</p>
+                      <div className="flex gap-1">
+                        <input type="number" min={0} max={trimEnd - 0.1} step={0.1} value={trimStart.toFixed(1)} onChange={e => handleTrimStart(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1 text-xs" />
+                        <Button size="sm" variant="outline" className="h-7 px-1.5 text-xs flex-shrink-0" onClick={() => handleTrimStart(currentTime)} title="Set to playhead">[</Button>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">End</p>
+                      <div className="flex gap-1">
+                        <input type="number" min={trimStart + 0.1} max={duration} step={0.1} value={trimEnd.toFixed(1)} onChange={e => handleTrimEnd(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1 text-xs" />
+                        <Button size="sm" variant="outline" className="h-7 px-1.5 text-xs flex-shrink-0" onClick={() => handleTrimEnd(currentTime)} title="Set to playhead">]</Button>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Opacity */}
                 <div>
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Opacity</h3>
-                  <div className="space-y-2">
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={opacity}
-                      onChange={e => handleOpacityChange(parseFloat(e.target.value))}
-                      className="w-full accent-green-500"
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>0%</span>
-                      <span className="text-accent font-bold">{Math.round(opacity * 100)}%</span>
-                      <span>100%</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Opacity</label>
+                    <span className="text-xs text-accent">{Math.round(opacity * 100)}%</span>
+                  </div>
+                  <input type="range" min={0} max={1} step={0.01} value={opacity} onChange={e => handleOpacityChange(Number(e.target.value))} className="w-full h-1.5 accent-accent" />
+                </div>
+
+                {/* Actions */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={createClip} disabled={!videoObjectUrl}>
+                    <Film className="w-3.5 h-3.5" /> Create Clip
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={splitClipAtPlayhead} disabled={!videoObjectUrl}>
+                    <SplitSquareHorizontal className="w-3.5 h-3.5" /> Split
+                  </Button>
+                </div>
+
+                {/* Clips List */}
+                {clips.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Clips ({clips.length})</label>
+                    <div className="space-y-1.5">
+                      {clips.map(clip => (
+                        <div key={clip.id} className="flex items-center gap-2 bg-background rounded-lg px-2 py-1.5 group">
+                          <Film className="w-3 h-3 text-accent flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate">{clip.name}</p>
+                            <p className="text-xs text-muted-foreground">{formatTime(clip.startTime)} → {formatTime(clip.endTime)}</p>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={async () => {
+                              if (!videoRef.current) return;
+                              setIsExporting(true); setExportingClipId(clip.id);
+                              try { await exportTrimmedClip(videoRef.current, clip.startTime, clip.endTime, clip.name, p => setExportProgress(p)); toast.success("Clip exported!"); }
+                              catch (err) { toast.error("Export failed: " + (err as Error).message); }
+                              finally { setIsExporting(false); setExportingClipId(null); }
+                            }} className="text-muted-foreground hover:text-accent transition-colors" title="Export clip">
+                              {exportingClipId === clip.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                            </button>
+                            <button onClick={() => removeClip(clip.id)} className="text-muted-foreground hover:text-destructive transition-colors"><X className="w-3.5 h-3.5" /></button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
+                )}
               </>
             )}
 
@@ -1294,227 +1142,46 @@ export default function Editor() {
             {activePanel === "ai" && (
               <>
                 <div>
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                    <Zap className="w-3.5 h-3.5" /> Scene Detection
-                  </h3>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Analyzes frame brightness histograms to find cut points — 100% client-side, no API needed.
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full h-8 text-xs gap-1.5"
-                    onClick={detectScenes}
-                    disabled={isDetectingScenes || !videoObjectUrl}
-                  >
-                    {isDetectingScenes
-                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing...</>
-                      : <><Film className="w-3.5 h-3.5" /> Detect Scenes</>}
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Scene Detection</label>
+                  <p className="text-xs text-muted-foreground mb-2">Analyzes brightness changes to find scene cuts automatically.</p>
+                  <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={detectScenes} disabled={!videoObjectUrl || isDetectingScenes}>
+                    {isDetectingScenes ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Detecting...</> : <><Zap className="w-3.5 h-3.5" /> Detect Scenes</>}
                   </Button>
-
                   {scenes.length > 0 && (
-                    <div className="mt-3 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground">{scenes.length} scenes found</p>
-                        <button
-                          onClick={() => setScenes([])}
-                          className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                        >
-                          Clear
+                    <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                      {scenes.map(s => (
+                        <button key={s.id} onClick={() => handleSeek(s.timestamp / 1000)} className="w-full flex items-center gap-2 px-2 py-1 rounded bg-background hover:bg-accent/10 text-xs transition-colors text-left">
+                          <div className="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0" />
+                          <span className="font-mono text-accent">{formatTime(s.timestamp / 1000)}</span>
+                          <span className="text-muted-foreground">Scene {s.id + 1}</span>
+                          <span className="ml-auto text-muted-foreground">{Math.round(s.confidence * 100)}%</span>
                         </button>
-                      </div>
-                      <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-                        {scenes.map(scene => (
-                          <button
-                            key={scene.id}
-                            onClick={() => handleSeek(scene.timestamp / 1000)}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded bg-background hover:bg-accent/10 transition-colors text-xs text-left"
-                          >
-                            <div
-                              className="w-2 h-2 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: `hsl(${120 * scene.confidence}, 70%, 50%)` }}
-                            />
-                            <span className="font-mono">{formatTime(scene.timestamp / 1000)}</span>
-                            <span className="text-muted-foreground">Scene {scene.id + 1}</span>
-                            <span className="text-muted-foreground ml-auto">{Math.round(scene.confidence * 100)}%</span>
-                            <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                          </button>
-                        ))}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full h-7 text-xs gap-1 mt-1"
-                        onClick={() => {
-                          // Auto-create clips from scenes
-                          const newClips: TimelineClip[] = [];
-                          for (let i = 0; i < scenes.length; i++) {
-                            const start = (scenes[i]?.timestamp ?? 0) / 1000;
-                            const end = i + 1 < scenes.length
-                              ? (scenes[i + 1]?.timestamp ?? 0) / 1000
-                              : duration;
-                            if (end - start >= 0.5) {
-                              newClips.push({
-                                id: `scene-clip-${Date.now()}-${i}`,
-                                name: `Scene ${i + 1}`,
-                                startTime: start,
-                                endTime: end,
-                                type: "video",
-                                opacity: 1,
-                                speed: 1,
-                              });
-                            }
-                          }
-                          setClips(prev => [...prev, ...newClips]);
-                          toast.success(`Created ${newClips.length} clips from scenes`);
-                        }}
-                      >
-                        <Plus className="w-3 h-3" /> Create Clips from Scenes
-                      </Button>
+                      ))}
                     </div>
                   )}
                 </div>
 
                 <div className="border-t border-border pt-4">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                    <Type className="w-3.5 h-3.5" /> Auto Captions
-                  </h3>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Transcribe audio using Whisper AI. Extracts audio from your video and generates timestamped captions.
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full h-8 text-xs gap-1.5"
-                    onClick={async () => {
-                      if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
-                      if (!projectDbId) { toast.error("Save your project first, then generate captions"); return; }
-                      if (!videoRef.current) return;
-
-                      setIsGeneratingCaptions(true);
-                      const toastId = toast.loading("Extracting audio & transcribing with Whisper...");
-                      try {
-                        // Extract audio from video using Web Audio API + MediaRecorder
-                        const audioCtx = new AudioContext();
-                        const video = videoRef.current;
-                        const source = audioCtx.createMediaElementSource(video);
-                        const dest = audioCtx.createMediaStreamDestination();
-                        source.connect(dest);
-                        source.connect(audioCtx.destination);
-
-                        const audioRecorder = new MediaRecorder(dest.stream, {
-                          mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-                            ? "audio/webm;codecs=opus" : "audio/webm"
-                        });
-                        const audioChunks: Blob[] = [];
-                        audioRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
-
-                        await new Promise<void>((resolve, reject) => {
-                          audioRecorder.onstop = () => resolve();
-                          audioRecorder.onerror = reject;
-                          audioRecorder.start(100);
-                          video.currentTime = 0;
-                          video.playbackRate = 16; // fast-forward to extract audio quickly
-                          video.muted = false;
-                          video.play().catch(reject);
-                          video.onended = () => { audioRecorder.stop(); video.playbackRate = speed; };
-                          // Safety timeout
-                          setTimeout(() => { if (audioRecorder.state === "recording") { audioRecorder.stop(); } }, Math.min(duration * 1000 / 16 + 5000, 60000));
-                        });
-
-                        audioCtx.close();
-
-                        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-                        if (audioBlob.size > 16 * 1024 * 1024) {
-                          throw new Error("Audio too large (>16MB). Try a shorter video.");
-                        }
-
-                        // Upload audio blob as base64 to get a URL
-                        const reader = new FileReader();
-                        const base64Audio = await new Promise<string>((res, rej) => {
-                          reader.onload = () => res((reader.result as string).split(",")[1] ?? "");
-                          reader.onerror = rej;
-                          reader.readAsDataURL(audioBlob);
-                        });
-
-                        // Upload audio via dedicated endpoint that does NOT overwrite project video
-                        const uploaded = await uploadAudioMutation.mutateAsync({
-                          projectId: projectDbId,
-                          fileName: `audio-${Date.now()}.webm`,
-                          fileData: base64Audio,
-                          mimeType: "audio/webm",
-                        });
-
-                        if (!uploaded?.url) throw new Error("Audio upload failed");
-
-                        const result = await generateCaptionsMutation.mutateAsync({
-                          projectId: projectDbId,
-                          audioUrl: uploaded.url,
-                          language: "en",
-                        });
-
-                        if (result.captions && result.captions.length > 0) {
-                          pushHistory(captureSnapshot());
-                          setCaptions(result.captions.map((c: any, i: number) => ({
-                            id: `cap-${Date.now()}-${i}`,
-                            startTime: c?.startTime ?? 0,
-                            endTime: c?.endTime ?? 0,
-                            text: c?.text ?? "",
-                          })));
-                          toast.dismiss(toastId);
-                          toast.success(`Generated ${result.captions.length} caption segments!`);
-                        } else if (result.fullText) {
-                          // Fallback: single caption for entire video
-                          pushHistory(captureSnapshot());
-                          setCaptions([{ id: `cap-${Date.now()}`, startTime: 0, endTime: duration * 1000, text: result.fullText }]);
-                          toast.dismiss(toastId);
-                          toast.success("Captions generated!");
-                        } else {
-                          toast.dismiss(toastId);
-                          toast.error("No speech detected in the video.");
-                        }
-                      } catch (err) {
-                        toast.dismiss(toastId);
-                        toast.error("Caption generation failed: " + (err as Error).message);
-                      } finally {
-                        setIsGeneratingCaptions(false);
-                      }
-                    }}
-                    disabled={!videoObjectUrl || isGeneratingCaptions}
-                  >
-                    {isGeneratingCaptions
-                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Transcribing...</>
-                      : <><Type className="w-3.5 h-3.5" /> Generate Captions</>}
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Auto Captions</label>
+                  <p className="text-xs text-muted-foreground mb-2">Transcribes speech using Whisper AI. Save your project first.</p>
+                  <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={generateCaptions} disabled={!videoObjectUrl || isGeneratingCaptions || !projectDbId}>
+                    {isGeneratingCaptions ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Transcribing...</> : <><Type className="w-3.5 h-3.5" /> Generate Captions</>}
                   </Button>
-
+                  {!projectDbId && videoObjectUrl && <p className="text-xs text-yellow-500 mt-1">Save your project first to enable captions.</p>}
                   {captions.length > 0 && (
-                    <div className="mt-3 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground">{captions.length} caption segments</p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setShowCaptions(v => !v)}
-                            className="text-xs text-accent hover:text-accent/80 transition-colors"
-                          >
-                            {showCaptions ? "Hide" : "Show"}
-                          </button>
-                          <button
-                            onClick={() => { pushHistory(captureSnapshot()); setCaptions([]); }}
-                            className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                          >
-                            Clear
-                          </button>
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-xs text-muted-foreground">{captions.length} segments</p>
+                        <div className="flex gap-2">
+                          <button onClick={() => setShowCaptions(v => !v)} className="text-xs text-accent hover:text-accent/80">{showCaptions ? "Hide" : "Show"}</button>
+                          <button onClick={() => { pushHistory(captureSnapshot()); setCaptions([]); }} className="text-xs text-muted-foreground hover:text-destructive">Clear</button>
                         </div>
                       </div>
-                      <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+                      <div className="max-h-32 overflow-y-auto space-y-1">
                         {captions.map(cap => (
-                          <button
-                            key={cap.id}
-                            onClick={() => handleSeek(cap.startTime / 1000)}
-                            className="w-full flex items-start gap-2 px-2 py-1.5 rounded bg-background hover:bg-accent/10 transition-colors text-xs text-left"
-                          >
+                          <button key={cap.id} onClick={() => handleSeek(cap.startTime / 1000)} className="w-full flex gap-2 px-2 py-1 rounded bg-background hover:bg-accent/10 text-xs text-left transition-colors">
                             <span className="font-mono text-accent flex-shrink-0">{formatTime(cap.startTime / 1000)}</span>
-                            <span className="text-muted-foreground line-clamp-2">{cap.text}</span>
+                            <span className="text-muted-foreground line-clamp-1">{cap.text}</span>
                           </button>
                         ))}
                       </div>
@@ -1523,20 +1190,10 @@ export default function Editor() {
                 </div>
 
                 <div className="border-t border-border pt-4">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Short-form Export</h3>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Export clips at 9:16 aspect ratio for TikTok, Reels, and Shorts.
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full h-8 text-xs gap-1.5"
-                    onClick={() => {
-                      if (clips.length === 0) { toast.error("Create clips first"); return; }
-                      toast.success(`${clips.length} clip(s) ready. Click the download icon on each clip to export.`);
-                    }}
-                  >
-                    Export Short-form Clips
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Short-form Export</label>
+                  <p className="text-xs text-muted-foreground mb-2">Export clips at 9:16 for TikTok, Reels, and Shorts.</p>
+                  <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={() => { if (clips.length === 0) { toast.error("Create clips first"); return; } setShowExportDialog(true); }}>
+                    <Download className="w-3.5 h-3.5" /> Export Short-form
                   </Button>
                 </div>
               </>
@@ -1546,131 +1203,99 @@ export default function Editor() {
             {activePanel === "text" && (
               <>
                 <div>
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <Type className="w-3.5 h-3.5" /> Text Overlay
-                  </h3>
-                  <div className="space-y-3">
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Add Text Overlay</label>
+                  <textarea value={newText} onChange={e => setNewText(e.target.value)} placeholder="Enter text..." rows={2} className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-accent" />
+                  <div className="grid grid-cols-2 gap-2 mt-2">
                     <div>
-                      <label className="text-xs text-muted-foreground">Text</label>
-                      <input
-                        type="text"
-                        value={newText}
-                        onChange={e => setNewText(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && addTextOverlay()}
-                        placeholder="Enter overlay text..."
-                        className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm mt-1"
-                        maxLength={200}
-                      />
+                      <p className="text-xs text-muted-foreground mb-1">Color</p>
+                      <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)} className="w-full h-8 rounded border border-border cursor-pointer" />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs text-muted-foreground">Color</label>
-                        <input
-                          type="color"
-                          value={textColor}
-                          onChange={e => setTextColor(e.target.value)}
-                          className="w-full h-8 rounded border border-border cursor-pointer mt-1"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">Size (px)</label>
-                        <input
-                          type="number"
-                          value={fontSize}
-                          min={10}
-                          max={120}
-                          onChange={e => setFontSize(Math.max(10, Math.min(120, parseInt(e.target.value) || 24)))}
-                          className="w-full bg-background border border-border rounded px-2 py-1 text-sm mt-1"
-                        />
-                      </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Size: {fontSize}px</p>
+                      <input type="range" min={12} max={72} value={fontSize} onChange={e => setFontSize(Number(e.target.value))} className="w-full h-1.5 accent-accent mt-2" />
                     </div>
-                    <Button
-                      size="sm"
-                      variant="default"
-                      className="w-full h-8 text-xs gap-1.5"
-                      onClick={addTextOverlay}
-                      disabled={!newText.trim()}
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Add Overlay
-                    </Button>
                   </div>
+                  <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5 mt-2" onClick={addTextOverlay} disabled={!videoObjectUrl || !newText.trim()}>
+                    <Type className="w-3.5 h-3.5" /> Add Overlay
+                  </Button>
                 </div>
-
                 {textOverlays.length > 0 && (
-                  <div className="border-t border-border pt-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Active Overlays ({textOverlays.length})</h3>
-                      <button
-                        onClick={() => setTextOverlays([])}
-                        className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        Clear all
-                      </button>
-                    </div>
-                    <div className="space-y-1">
-                      {textOverlays.map(overlay => (
-                        <div key={overlay.id} className="flex items-center gap-2 bg-background rounded px-2 py-1.5 text-xs">
-                          <div
-                            className="w-3 h-3 rounded-full border border-border flex-shrink-0"
-                            style={{ backgroundColor: overlay.color }}
-                          />
-                          <span className="flex-1 truncate font-medium">{overlay.text}</span>
-                          <span className="text-muted-foreground">{overlay.fontSize}px</span>
-                          <button
-                            onClick={() => removeTextOverlay(overlay.id)}
-                            className="text-muted-foreground hover:text-destructive transition-colors"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Overlays ({textOverlays.length})</label>
+                    <div className="space-y-1.5">
+                      {textOverlays.map(o => (
+                        <div key={o.id} className="flex items-center gap-2 bg-background rounded px-2 py-1.5 group">
+                          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: o.color }} />
+                          <span className="text-xs flex-1 truncate">{o.text}</span>
+                          <button onClick={() => removeTextOverlay(o.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"><X className="w-3.5 h-3.5" /></button>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-
-                {!videoObjectUrl && (
-                  <p className="text-xs text-muted-foreground text-center py-2 border border-dashed border-border rounded p-3">
-                    Upload a video to preview text overlays
-                  </p>
-                )}
               </>
             )}
 
-            {/* Effects Panel */}
+            {/* ── Audio / Effects Panel ── */}
             {activePanel === "effects" && (
               <AudioEffectsPanel
                 videoRef={videoRef}
                 audioTracks={audioTracks}
-                onAddAudioTrack={async (file) => {
-                  const reader = new FileReader();
-                  reader.onload = async (e) => {
-                    const data = e.target?.result as string;
-                    const audio = new Audio();
-                    audio.onloadedmetadata = () => {
-                      const newTrack: AudioTrack = {
-                        id: `audio-${Date.now()}`,
-                        name: file.name,
-                        duration: audio.duration * 1000,
-                        volume: 100,
-                        startTime: 0,
-                      };
-                      setAudioTracks(prev => [...prev, newTrack]);
-                    };
-                    audio.src = data;
-                  };
-                  reader.readAsDataURL(file);
-                }}
-                onRemoveAudioTrack={(trackId) => {
-                  setAudioTracks(prev => prev.filter(t => t.id !== trackId));
-                }}
-                onUpdateAudioTrack={(trackId, volume) => {
-                  setAudioTracks(prev => prev.map(t => t.id === trackId ? { ...t, volume } : t));
-                }}
+                onAddAudioTrack={handleAddAudioTrack}
+                onRemoveAudioTrack={handleRemoveAudioTrack}
+                onUpdateAudioTrack={handleUpdateAudioTrack}
                 effects={effects}
                 onEffectsChange={setEffects}
                 activeTab={audioEffectsTab}
                 onTabChange={setAudioEffectsTab}
               />
+            )}
+
+            {/* ── Color Grading Panel ── */}
+            {activePanel === "color" && (
+              <ColorGradingPanel
+                grade={colorGrade}
+                onChange={setColorGrade}
+                videoRef={videoRef}
+                projectDbId={projectDbId}
+              />
+            )}
+
+            {/* ── Chatbot Panel ── */}
+            {activePanel === "chat" && (
+              <div className="flex flex-col h-full -m-3">
+                <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0" style={{ maxHeight: "calc(100vh - 280px)" }}>
+                  {chatMessages.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs whitespace-pre-wrap ${msg.role === "user" ? "bg-accent text-accent-foreground" : "bg-background text-foreground border border-border"}`}>
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                  {isChatLoading && (
+                    <div className="flex justify-start">
+                      <div className="bg-background border border-border rounded-xl px-3 py-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+                <div className="flex-shrink-0 border-t border-border p-3">
+                  <div className="flex gap-2">
+                    <input
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+                      placeholder="Type a command..."
+                      className="flex-1 bg-background border border-border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                    <Button size="sm" variant="default" className="h-8 w-8 p-0 bg-accent hover:bg-accent/90 text-accent-foreground flex-shrink-0" onClick={sendChatMessage} disabled={!chatInput.trim() || isChatLoading}>
+                      <Send className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -1692,11 +1317,22 @@ export default function Editor() {
             trimEnd={trimEnd}
           />
         ) : (
-          <div className="h-20 flex items-center justify-center text-sm text-muted-foreground border border-dashed border-border rounded-lg">
+          <div className="h-16 flex items-center justify-center text-xs text-muted-foreground border border-dashed border-border rounded-lg">
             Upload a video to see the interactive timeline
           </div>
         )}
       </div>
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        videoRef={videoRef as React.RefObject<HTMLVideoElement>}
+        videoObjectUrl={videoObjectUrl}
+        clips={clips}
+        duration={duration}
+        projectName={projectName}
+      />
     </div>
   );
 }

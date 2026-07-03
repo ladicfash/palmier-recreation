@@ -106,3 +106,8 @@
 - [ ] Support multiple detection methods (content, adaptive, threshold)
 - [ ] Combine histogram + PySceneDetect for comprehensive detection
 - [ ] Show confidence scores for detected scenes
+
+## Bug Fixes (Priority - Current Sprint)
+- [ ] Fix: Audio upload - audio files not playing back in editor
+- [ ] Fix: Captions - caption generation fails ("Failed to fetch audio file")
+- [ ] Fix: Audio tracks - volume control not affecting playback

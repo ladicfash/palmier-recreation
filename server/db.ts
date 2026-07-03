@@ -311,3 +311,9 @@ export async function getProjectColorGrades(projectId: number) {
 
   return db.select().from(colorGrades).where(eq(colorGrades.projectId, projectId));
 }
+
+export async function updateAudioTrackVolume(trackId: number, volume: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(audioTracks).set({ volume }).where(eq(audioTracks.id, trackId));
+}
