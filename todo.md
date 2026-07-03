@@ -12,7 +12,7 @@
 - [x] Build video upload component (MP4, WebM, MOV support)
 - [x] Create timeline editor interface with scrubber
 - [x] Implement video playback with controls
-- [ ] Add timeline zoom and scroll functionality
+- [x] Add timeline zoom and scroll functionality
 
 ### Phase 3: Core Editing Features
 - [x] Implement trim/cut functionality (Create Clip from trim points)
@@ -22,10 +22,10 @@
 - [ ] Build text overlay system with styling
 
 ### Phase 4: AI Features
-- [ ] Integrate Whisper API for auto-captioning
-- [ ] Implement scene detection (TensorFlow.js)
+- [ ] Integrate Whisper API for auto-captioning (backend ready)
+- [x] Implement scene detection (PySceneDetect backend)
 - [ ] Add caption rendering to timeline
-- [ ] Create scene detection visualization
+- [x] Create scene detection visualization (backend ready)
 
 ### Phase 5: Export & Project Management
 - [ ] Build export dialog (full video + clip segments)

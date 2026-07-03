@@ -5,6 +5,8 @@ import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { transcribeAudio } from "./_core/voiceTranscription";
+import { execSync } from "child_process";
+import { join } from "path";
 
 export const appRouter = router({
   system: systemRouter,
@@ -119,15 +121,45 @@ export const appRouter = router({
     detect: protectedProcedure
       .input(z.object({
         projectId: z.number(),
+        videoPath: z.string(),
+        threshold: z.number().default(27.0),
+        method: z.enum(["content", "adaptive", "threshold"]).default("content"),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Placeholder for scene detection
-        // In production, this would use computer vision to detect scene changes
-        return {
-          success: true,
-          message: "Scene detection coming soon - requires video processing backend",
-          scenes: [],
-        };
+        try {
+          // Call Python script for scene detection
+          const scriptPath = join(process.cwd(), "server", "scene_detection.py");
+          const command = `python3 "${scriptPath}" "${input.videoPath}" ${input.threshold} ${input.method}`;
+          
+          const output = execSync(command, { encoding: "utf-8" });
+          const result = JSON.parse(output);
+
+          if (!result.success) {
+            throw new Error(result.error || "Scene detection failed");
+          }
+
+          // Save detected scenes to database
+          const savedScenes = [];
+          for (const scene of result.scenes) {
+            const saved = await db.createSceneDetection(
+              input.projectId,
+              Math.floor(scene.timestamp * 1000),
+              scene.confidence
+            );
+            savedScenes.push(saved);
+          }
+
+          return {
+            success: true,
+            scenes: result.scenes,
+            sceneCount: result.scene_count,
+            method: result.method,
+            threshold: result.threshold,
+          };
+        } catch (error) {
+          console.error("Scene detection error:", error);
+          throw new Error(`Failed to detect scenes: ${error instanceof Error ? error.message : "Unknown error"}`);
+        }
       }),
 
     list: protectedProcedure

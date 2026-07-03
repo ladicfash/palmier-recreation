@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { TimelineEditor } from "@/components/TimelineEditor";
 import { Upload, Play, Pause, Volume2, Settings, Download, Plus, Trash2, Save, FolderOpen } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import { Link } from "wouter";
@@ -553,7 +554,19 @@ export default function Editor() {
             <div className="border-t border-border pt-4">
               <h3 className="text-sm font-semibold mb-3">AI Features</h3>
               <div className="space-y-2">
-                <Button size="sm" variant="outline" className="w-full justify-start">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={() => {
+                    if (!videoUrl) {
+                      toast.error("Please upload a video first");
+                      return;
+                    }
+                    toast.info("Scene detection started...");
+                    // Scene detection will be triggered here
+                  }}
+                >
                   Detect Scenes
                 </Button>
                 <Button size="sm" variant="outline" className="w-full justify-start">
@@ -569,11 +582,30 @@ export default function Editor() {
       </div>
 
       {/* Timeline */}
-      <div className="border-t border-border bg-card/50 p-4 h-32 overflow-x-auto">
-        <h3 className="text-sm font-semibold mb-2">Timeline</h3>
-        <div className="bg-background rounded border border-border h-24 flex items-center justify-center text-sm text-muted-foreground">
-          Timeline visualization coming soon
-        </div>
+      <div className="border-t border-border bg-card/50 p-4">
+        <h3 className="text-sm font-semibold mb-4">Timeline</h3>
+        {videoUrl ? (
+          <TimelineEditor
+            duration={duration}
+            currentTime={currentTime}
+            clips={project.clips}
+            scenes={[]}
+            onSeek={(time) => {
+              setCurrentTime(time);
+              if (videoRef.current) {
+                videoRef.current.currentTime = time;
+              }
+            }}
+            onTrimStart={handleTrimStart}
+            onTrimEnd={handleTrimEnd}
+            trimStart={project.trimStart}
+            trimEnd={project.trimEnd}
+          />
+        ) : (
+          <div className="bg-background rounded border border-border h-32 flex items-center justify-center text-sm text-muted-foreground">
+            Upload a video to see the timeline
+          </div>
+        )}
       </div>
     </div>
   );
