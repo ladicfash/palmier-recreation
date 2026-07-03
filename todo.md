@@ -137,17 +137,25 @@
 - [x] Implement layer effects (per-layer brightness/contrast/saturation/blur/hue)
 - [ ] Add layer keyframes (deferred: animation support)
 
-## Phase 14: Google Cloud Text-to-Speech Voice Generation
-- [x] Add GOOGLE_CLOUD_TTS_KEY to secrets (user to provide)
-- [x] Implement voice generation endpoint (tRPC: voice.generate, voice.listVoices)
-- [x] Build voice generation UI (text input, 8 voice options, rate/pitch sliders)
+## Phase 14: Puter.js Text-to-Speech Voice Generation
+- [x] Implement Puter.js TTS integration (client-side, no API keys)
+- [x] Build voice generation UI (text input, 3 engines, 8 languages)
 - [x] Add generated audio to timeline as audio layer (auto-creates audio layer)
-- [ ] Test voice quality and latency (waiting for user to provide Google Cloud key)
+- [x] Support Standard, Neural, Generative engines
+- [x] Base64 encoding for audio upload to storage
 
-## Phase 15: Runway Video Generation (Alternative to Kling)
+## Phase 15: Runway Video Generation (Alternative to Kling) [DEFERRED]
 - [ ] Add RUNWAY_API_KEY to secrets
 - [ ] Implement video generation endpoint (tRPC - async with polling)
 - [ ] Build video generation UI (prompt input, duration, generate button)
 - [ ] Add generated video to timeline as video layer
 - [ ] Handle async generation (show progress, poll for completion)
 - [ ] Test video quality and generation time
+
+## Known Limitations & Future Work
+- [ ] Layer keyframes (animation support)
+- [ ] Link sharing (YouTube/TikTok/Instagram download)
+- [ ] Viral clip detection (engagement pattern analysis)
+- [ ] Export to multiple formats (MP4, WebM, ProRes)
+- [ ] Collaboration features (real-time multi-user editing)
+- [ ] Template system (pre-built project templates)
