@@ -6,7 +6,8 @@ import { ExportDialog } from "@/components/ExportDialog";
 import {
   Upload, Play, Pause, Volume2, Download,
   Plus, Save, FolderOpen, Scissors, Type,
-  Zap, Film, ChevronRight, X, Loader2, AlertCircle, SplitSquareHorizontal
+  Zap, Film, ChevronRight, X, Loader2, AlertCircle, SplitSquareHorizontal,
+  Undo2, Redo2
 } from "lucide-react";
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Link } from "wouter";
@@ -35,6 +36,25 @@ interface SceneMarker {
   id: number;
   timestamp: number;
   confidence: number;
+}
+
+interface Caption {
+  id: string;
+  startTime: number; // ms
+  endTime: number;   // ms
+  text: string;
+}
+
+// ─── Undo/Redo History ────────────────────────────────────────────────────────
+interface EditorSnapshot {
+  clips: TimelineClip[];
+  textOverlays: TextOverlay[];
+  scenes: SceneMarker[];
+  captions: Caption[];
+  trimStart: number;
+  trimEnd: number;
+  speed: number;
+  opacity: number;
 }
 
 // ─── MediaRecorder Export Helper ─────────────────────────────────────────────
@@ -147,7 +167,16 @@ export default function Editor() {
 
   // AI state
   const [isDetectingScenes, setIsDetectingScenes] = useState(false);
+  const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
+  const [captions, setCaptions] = useState<Caption[]>([]);
+  const [showCaptions, setShowCaptions] = useState(true);
   const [activePanel, setActivePanel] = useState<"edit" | "ai" | "text">("edit");
+
+  // Undo/redo history
+  const historyRef = useRef<EditorSnapshot[]>([]);
+  const historyIndexRef = useRef<number>(-1);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
@@ -174,7 +203,76 @@ export default function Editor() {
   const uploadVideoMutation = trpc.videos.upload.useMutation({
     onError: (err) => console.warn("Video upload failed:", err.message),
   });
+  const uploadAudioMutation = trpc.videos.uploadAudio.useMutation({
+    onError: (err) => console.warn("Audio upload failed:", err.message),
+  });
+  const generateCaptionsMutation = trpc.captions.generate.useMutation({
+    onError: (err) => toast.error("Caption generation failed: " + err.message),
+  });
   const { data: projectList, isLoading: isLoadingProjects, error: projectListError } = trpc.projects.list.useQuery();
+
+  // ─── Undo/Redo ────────────────────────────────────────────────────────────────
+  const captureSnapshot = useCallback((): EditorSnapshot => ({
+    clips: [...clips],
+    textOverlays: [...textOverlays],
+    scenes: [...scenes],
+    captions: [...captions],
+    trimStart,
+    trimEnd,
+    speed,
+    opacity,
+  }), [clips, textOverlays, scenes, captions, trimStart, trimEnd, speed, opacity]);
+
+  const pushHistory = useCallback((snapshot: EditorSnapshot) => {
+    const history = historyRef.current;
+    const idx = historyIndexRef.current;
+    // Discard any redo states
+    history.splice(idx + 1);
+    history.push(snapshot);
+    // Keep last 50 snapshots
+    if (history.length > 50) history.shift();
+    historyIndexRef.current = history.length - 1;
+    setCanUndo(historyIndexRef.current > 0);
+    setCanRedo(false);
+  }, []);
+
+  const undo = useCallback(() => {
+    const idx = historyIndexRef.current;
+    if (idx <= 0) return;
+    historyIndexRef.current = idx - 1;
+    const snap = historyRef.current[historyIndexRef.current]!;
+    setClips(snap.clips);
+    setTextOverlays(snap.textOverlays);
+    setScenes(snap.scenes);
+    setCaptions(snap.captions);
+    setTrimStart(snap.trimStart);
+    setTrimEnd(snap.trimEnd);
+    setSpeed(snap.speed);
+    setOpacity(snap.opacity);
+    if (videoRef.current) videoRef.current.playbackRate = snap.speed;
+    setCanUndo(historyIndexRef.current > 0);
+    setCanRedo(true);
+    toast.success("Undo");
+  }, []);
+
+  const redo = useCallback(() => {
+    const idx = historyIndexRef.current;
+    if (idx >= historyRef.current.length - 1) return;
+    historyIndexRef.current = idx + 1;
+    const snap = historyRef.current[historyIndexRef.current]!;
+    setClips(snap.clips);
+    setTextOverlays(snap.textOverlays);
+    setScenes(snap.scenes);
+    setCaptions(snap.captions);
+    setTrimStart(snap.trimStart);
+    setTrimEnd(snap.trimEnd);
+    setSpeed(snap.speed);
+    setOpacity(snap.opacity);
+    if (videoRef.current) videoRef.current.playbackRate = snap.speed;
+    setCanUndo(true);
+    setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+    toast.success("Redo");
+  }, []);
 
   // ─── Video Upload ─────────────────────────────────────────────────────────────
   const handleVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -273,27 +371,48 @@ export default function Editor() {
     }
   }, []);
 
+  // Debounce ref for history pushes on continuous sliders
+  const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSnapshotRef = useRef<EditorSnapshot | null>(null);
+
+  const pushHistoryDebounced = useCallback((snapshot: EditorSnapshot) => {
+    // Save the pre-change snapshot only once per drag gesture
+    if (!pendingSnapshotRef.current) pendingSnapshotRef.current = snapshot;
+    if (historyDebounceRef.current) clearTimeout(historyDebounceRef.current);
+    historyDebounceRef.current = setTimeout(() => {
+      if (pendingSnapshotRef.current) {
+        pushHistory(pendingSnapshotRef.current);
+        pendingSnapshotRef.current = null;
+      }
+    }, 600);
+  }, [pushHistory]);
+
   const handleSpeedChange = useCallback((val: number) => {
+    pushHistoryDebounced(captureSnapshot());
     setSpeed(val);
     if (videoRef.current) videoRef.current.playbackRate = val;
-  }, []);
+  }, [pushHistoryDebounced, captureSnapshot]);
 
   const handleOpacityChange = useCallback((val: number) => {
+    pushHistoryDebounced(captureSnapshot());
     setOpacity(Math.max(0, Math.min(1, val)));
-  }, []);
+  }, [pushHistoryDebounced, captureSnapshot]);
 
   // ─── Trim & Clips ─────────────────────────────────────────────────────────────
   const handleTrimStart = useCallback((t: number) => {
+    pushHistoryDebounced(captureSnapshot());
     setTrimStart(Math.max(0, Math.min(t, trimEnd - 0.1)));
-  }, [trimEnd]);
+  }, [trimEnd, pushHistoryDebounced, captureSnapshot]);
 
   const handleTrimEnd = useCallback((t: number) => {
+    pushHistoryDebounced(captureSnapshot());
     setTrimEnd(Math.min(duration, Math.max(t, trimStart + 0.1)));
-  }, [trimStart, duration]);
+  }, [trimStart, duration, pushHistoryDebounced, captureSnapshot]);
 
   const createClip = useCallback(() => {
     if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
     if (trimEnd - trimStart < 0.5) { toast.error("Clip must be at least 0.5 seconds long"); return; }
+    pushHistory(captureSnapshot());
 
     const clip: TimelineClip = {
       id: `clip-${Date.now()}`,
@@ -319,13 +438,15 @@ export default function Editor() {
   }, [videoObjectUrl, trimStart, trimEnd, clips.length, opacity, speed, projectDbId, saveClipMutation]);
 
   const removeClip = useCallback((id: string) => {
+    pushHistory(captureSnapshot());
     setClips(prev => prev.filter(c => c.id !== id));
     toast.success("Clip removed");
-  }, []);
+  }, [pushHistory, captureSnapshot]);
 
   // ─── Text Overlays ────────────────────────────────────────────────────────────
   const addTextOverlay = useCallback(() => {
     if (!newText.trim()) { toast.error("Enter some text first"); return; }
+    pushHistory(captureSnapshot());
     const overlay: TextOverlay = {
       id: `text-${Date.now()}`,
       text: newText.trim(),
@@ -340,8 +461,9 @@ export default function Editor() {
   }, [newText, fontSize, textColor]);
 
   const removeTextOverlay = useCallback((id: string) => {
+    pushHistory(captureSnapshot());
     setTextOverlays(prev => prev.filter(t => t.id !== id));
-  }, []);
+  }, [pushHistory, captureSnapshot]);
 
   // ─── Project Save / Load ──────────────────────────────────────────────────────
   const saveProject = useCallback(async () => {
@@ -635,6 +757,8 @@ export default function Editor() {
       if (e.code === "ArrowLeft") { e.preventDefault(); handleSeek(currentTime - 5); }
       if (e.code === "ArrowRight") { e.preventDefault(); handleSeek(currentTime + 5); }
       if (e.code === "KeyM") handleVolumeChange(isMuted ? 1 : 0);
+      if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ" && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && (e.code === "KeyY" || (e.code === "KeyZ" && e.shiftKey))) { e.preventDefault(); redo(); }
       if (e.code === "BracketLeft") handleTrimStart(currentTime);
       if (e.code === "BracketRight") handleTrimEnd(currentTime);
     };
@@ -703,6 +827,28 @@ export default function Editor() {
           )}
 
           <div className="flex items-center gap-2">
+            {/* Undo/Redo */}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={undo}
+              disabled={!canUndo}
+              className="h-8 w-8 p-0"
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={redo}
+              disabled={!canRedo}
+              className="h-8 w-8 p-0"
+              title="Redo (Ctrl+Y)"
+            >
+              <Redo2 className="w-3.5 h-3.5" />
+            </Button>
+            <div className="w-px h-5 bg-border mx-1" />
             <Button size="sm" variant="outline" onClick={() => setShowProjects(!showProjects)} className="gap-2 h-8 text-xs">
               <FolderOpen className="w-3.5 h-3.5" />
               Projects
@@ -806,6 +952,27 @@ export default function Editor() {
                   onCanPlay={() => setIsVideoLoading(false)}
                   preload="metadata"
                 />
+                {/* Caption Rendering */}
+                {showCaptions && captions.length > 0 && (() => {
+                  const currentMs = currentTime * 1000;
+                  const activeCap = captions.find(c => currentMs >= c.startTime && currentMs <= c.endTime);
+                  return activeCap ? (
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 max-w-[90%] pointer-events-none select-none">
+                      <div
+                        className="px-3 py-1.5 rounded text-white font-medium text-center"
+                        style={{
+                          fontSize: "clamp(14px, 2.5vw, 22px)",
+                          background: "rgba(0,0,0,0.75)",
+                          textShadow: "0 1px 4px rgba(0,0,0,0.9)",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {activeCap.text}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
                 {/* Text Overlays */}
                 {textOverlays.map(overlay => (
                   <div
@@ -1193,23 +1360,150 @@ export default function Editor() {
                 </div>
 
                 <div className="border-t border-border pt-4">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Auto Captions</h3>
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                    <Type className="w-3.5 h-3.5" /> Auto Captions
+                  </h3>
                   <p className="text-xs text-muted-foreground mb-3">
-                    Transcribe audio using Whisper AI. Save your project first to enable this feature.
+                    Transcribe audio using Whisper AI. Extracts audio from your video and generates timestamped captions.
                   </p>
                   <Button
                     size="sm"
                     variant="outline"
                     className="w-full h-8 text-xs gap-1.5"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
-                      if (!projectDbId) { toast.error("Save your project first to generate captions"); return; }
-                      toast.info("Whisper caption generation — coming soon! Your project is saved and ready.");
+                      if (!projectDbId) { toast.error("Save your project first, then generate captions"); return; }
+                      if (!videoRef.current) return;
+
+                      setIsGeneratingCaptions(true);
+                      const toastId = toast.loading("Extracting audio & transcribing with Whisper...");
+                      try {
+                        // Extract audio from video using Web Audio API + MediaRecorder
+                        const audioCtx = new AudioContext();
+                        const video = videoRef.current;
+                        const source = audioCtx.createMediaElementSource(video);
+                        const dest = audioCtx.createMediaStreamDestination();
+                        source.connect(dest);
+                        source.connect(audioCtx.destination);
+
+                        const audioRecorder = new MediaRecorder(dest.stream, {
+                          mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+                            ? "audio/webm;codecs=opus" : "audio/webm"
+                        });
+                        const audioChunks: Blob[] = [];
+                        audioRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+
+                        await new Promise<void>((resolve, reject) => {
+                          audioRecorder.onstop = () => resolve();
+                          audioRecorder.onerror = reject;
+                          audioRecorder.start(100);
+                          video.currentTime = 0;
+                          video.playbackRate = 16; // fast-forward to extract audio quickly
+                          video.muted = false;
+                          video.play().catch(reject);
+                          video.onended = () => { audioRecorder.stop(); video.playbackRate = speed; };
+                          // Safety timeout
+                          setTimeout(() => { if (audioRecorder.state === "recording") { audioRecorder.stop(); } }, Math.min(duration * 1000 / 16 + 5000, 60000));
+                        });
+
+                        audioCtx.close();
+
+                        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                        if (audioBlob.size > 16 * 1024 * 1024) {
+                          throw new Error("Audio too large (>16MB). Try a shorter video.");
+                        }
+
+                        // Upload audio blob as base64 to get a URL
+                        const reader = new FileReader();
+                        const base64Audio = await new Promise<string>((res, rej) => {
+                          reader.onload = () => res((reader.result as string).split(",")[1] ?? "");
+                          reader.onerror = rej;
+                          reader.readAsDataURL(audioBlob);
+                        });
+
+                        // Upload audio via dedicated endpoint that does NOT overwrite project video
+                        const uploaded = await uploadAudioMutation.mutateAsync({
+                          projectId: projectDbId,
+                          fileName: `audio-${Date.now()}.webm`,
+                          fileData: base64Audio,
+                          mimeType: "audio/webm",
+                        });
+
+                        if (!uploaded?.url) throw new Error("Audio upload failed");
+
+                        const result = await generateCaptionsMutation.mutateAsync({
+                          projectId: projectDbId,
+                          audioUrl: uploaded.url,
+                          language: "en",
+                        });
+
+                        if (result.captions && result.captions.length > 0) {
+                          pushHistory(captureSnapshot());
+                          setCaptions(result.captions.map((c: any, i: number) => ({
+                            id: `cap-${Date.now()}-${i}`,
+                            startTime: c?.startTime ?? 0,
+                            endTime: c?.endTime ?? 0,
+                            text: c?.text ?? "",
+                          })));
+                          toast.dismiss(toastId);
+                          toast.success(`Generated ${result.captions.length} caption segments!`);
+                        } else if (result.fullText) {
+                          // Fallback: single caption for entire video
+                          pushHistory(captureSnapshot());
+                          setCaptions([{ id: `cap-${Date.now()}`, startTime: 0, endTime: duration * 1000, text: result.fullText }]);
+                          toast.dismiss(toastId);
+                          toast.success("Captions generated!");
+                        } else {
+                          toast.dismiss(toastId);
+                          toast.error("No speech detected in the video.");
+                        }
+                      } catch (err) {
+                        toast.dismiss(toastId);
+                        toast.error("Caption generation failed: " + (err as Error).message);
+                      } finally {
+                        setIsGeneratingCaptions(false);
+                      }
                     }}
-                    disabled={!videoObjectUrl}
+                    disabled={!videoObjectUrl || isGeneratingCaptions}
                   >
-                    Generate Captions
+                    {isGeneratingCaptions
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Transcribing...</>
+                      : <><Type className="w-3.5 h-3.5" /> Generate Captions</>}
                   </Button>
+
+                  {captions.length > 0 && (
+                    <div className="mt-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">{captions.length} caption segments</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setShowCaptions(v => !v)}
+                            className="text-xs text-accent hover:text-accent/80 transition-colors"
+                          >
+                            {showCaptions ? "Hide" : "Show"}
+                          </button>
+                          <button
+                            onClick={() => { pushHistory(captureSnapshot()); setCaptions([]); }}
+                            className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                      <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+                        {captions.map(cap => (
+                          <button
+                            key={cap.id}
+                            onClick={() => handleSeek(cap.startTime / 1000)}
+                            className="w-full flex items-start gap-2 px-2 py-1.5 rounded bg-background hover:bg-accent/10 transition-colors text-xs text-left"
+                          >
+                            <span className="font-mono text-accent flex-shrink-0">{formatTime(cap.startTime / 1000)}</span>
+                            <span className="text-muted-foreground line-clamp-2">{cap.text}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-border pt-4">
@@ -1337,6 +1631,7 @@ export default function Editor() {
             currentTime={currentTime}
             clips={clips}
             scenes={scenes}
+            captions={captions.map(c => ({ id: String(c.id), startTime: c.startTime, endTime: c.endTime, text: c.text }))}
             onSeek={handleSeek}
             onTrimStart={handleTrimStart}
             onTrimEnd={handleTrimEnd}

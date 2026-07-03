@@ -38,6 +38,22 @@ export const appRouter = router({
         await db.updateProject(input.projectId, ctx.user.id, { videoUrl: url, videoKey: key });
         return { url, key };
       }),
+
+    // Dedicated audio upload — does NOT overwrite project video metadata
+    uploadAudio: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+        fileName: z.string(),
+        fileData: z.string(), // base64 encoded
+        mimeType: z.string().default("audio/webm"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const buffer = Buffer.from(input.fileData, "base64");
+        const key = `audio/${ctx.user.id}/${input.projectId}/${input.fileName}`;
+        const { url } = await storagePut(key, buffer, input.mimeType);
+        // Do NOT update project video URL — this is a temporary audio file for transcription
+        return { url, key };
+      }),
   }),
 
   projects: router({

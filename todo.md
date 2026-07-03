@@ -22,10 +22,10 @@
 - [x] Build text overlay system with styling (color, font size, live preview)
 
 ### Phase 4: AI Features
-- [ ] Integrate Whisper API for auto-captioning (backend ready)
-- [x] Implement scene detection (PySceneDetect backend)
-- [ ] Add caption rendering to timeline
-- [x] Create scene detection visualization (backend ready)
+- [x] Integrate Whisper API for auto-captioning (full pipeline: audio extract → S3 → Whisper → display)
+- [x] Implement scene detection (client-side histogram analysis)
+- [x] Add caption rendering to timeline (live subtitle overlay on video)
+- [x] Create scene detection visualization (scene list + seek on click)
 
 ### Phase 5: Export & Project Management
 - [x] Build export dialog (full video + clip segments + short-form)
@@ -35,7 +35,7 @@
 
 ### Phase 6: Polish & Testing
 - [x] Add keyboard shortcuts (Space=play, arrows=seek, M=mute)
-- [ ] Implement undo/redo
+- [x] Implement undo/redo (50-step history, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z)
 - [x] Create loading states and error handling
 - [x] Test on multiple browsers
 - [x] Performance optimization (stable object URLs, memoized callbacks)
@@ -64,4 +64,4 @@
 - [x] Add: Export - MediaRecorder-based trimmed video export (ExportDialog)
 - [x] Add: Short-form clip export (9:16 / 1:1 / 16:9 in ExportDialog)
 - [x] Add: Keyboard shortcuts (space=play/pause, left/right=seek, M=mute)
-- [ ] Add: Undo/redo for editing actions
+- [x] Add: Undo/redo for editing actions (50-step history with keyboard shortcuts)
