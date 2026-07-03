@@ -145,17 +145,39 @@ export async function deleteProject(projectId: number, userId: number) {
 }
 
 // Clip queries
-export async function createClip(projectId: number, name: string, startTime: number, endTime: number, type: "video" | "audio" | "text") {
+export async function createClip(
+  projectId: number,
+  name: string,
+  startTime: number,
+  endTime: number,
+  type: "video" | "audio" | "text",
+  opacity?: number,
+  speed?: number,
+  textContent?: string,
+  textColor?: string,
+  textSize?: number
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  return db.insert(clips).values({
+  const result = await db.insert(clips).values({
     projectId,
     name,
     startTime,
     endTime,
     type,
+    opacity: opacity ?? 1,
+    speed: speed ?? 1,
+    textContent: textContent ?? null,
+    textColor: textColor ?? null,
+    textSize: textSize ?? null,
   });
+
+  // Return the inserted clip
+  const created = await db.select().from(clips).where(
+    and(eq(clips.projectId, projectId), eq(clips.name, name), eq(clips.startTime, startTime))
+  ).orderBy(clips.id).limit(1);
+  return created.length > 0 ? created[0] : null;
 }
 
 export async function getProjectClips(projectId: number) {
@@ -198,6 +220,27 @@ export async function getProjectCaptions(projectId: number) {
   if (!db) throw new Error("Database not available");
 
   return db.select().from(captions).where(eq(captions.projectId, projectId));
+}
+
+// Full project load (project + clips + captions + scenes)
+export async function getFullProject(projectId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const projectRows = await db.select().from(projects).where(
+    and(eq(projects.id, projectId), eq(projects.userId, userId))
+  ).limit(1);
+
+  if (projectRows.length === 0) return null;
+  const project = projectRows[0]!;
+
+  const [projectClips, projectCaptions, projectScenes] = await Promise.all([
+    db.select().from(clips).where(eq(clips.projectId, projectId)),
+    db.select().from(captions).where(eq(captions.projectId, projectId)),
+    db.select().from(sceneDetections).where(eq(sceneDetections.projectId, projectId)),
+  ]);
+
+  return { project, clips: projectClips, captions: projectCaptions, scenes: projectScenes };
 }
 
 // Scene detection queries

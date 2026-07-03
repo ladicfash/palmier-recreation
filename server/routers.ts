@@ -7,6 +7,7 @@ import * as db from "./db";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { execSync } from "child_process";
 import { join } from "path";
+import { storagePut } from "./storage";
 
 export const appRouter = router({
   system: systemRouter,
@@ -19,6 +20,24 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+  }),
+
+  videos: router({
+    upload: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+        fileName: z.string(),
+        fileData: z.string(), // base64 encoded
+        mimeType: z.string().default("video/mp4"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const buffer = Buffer.from(input.fileData, "base64");
+        const key = `videos/${ctx.user.id}/${input.projectId}/${input.fileName}`;
+        const { url } = await storagePut(key, buffer, input.mimeType);
+        // Update project with video URL
+        await db.updateProject(input.projectId, ctx.user.id, { videoUrl: url, videoKey: key });
+        return { url, key };
+      }),
   }),
 
   projects: router({
@@ -39,6 +58,12 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number() }))
       .query(async ({ ctx, input }) => {
         return db.getProjectById(input.projectId, ctx.user.id);
+      }),
+
+    getFull: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return db.getFullProject(input.projectId, ctx.user.id);
       }),
 
     update: protectedProcedure
@@ -125,6 +150,11 @@ export const appRouter = router({
         startTime: z.number(),
         endTime: z.number(),
         type: z.string().default("video"),
+        opacity: z.number().optional(),
+        speed: z.number().optional(),
+        textContent: z.string().optional(),
+        textColor: z.string().optional(),
+        textSize: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         return db.createClip(
@@ -132,7 +162,12 @@ export const appRouter = router({
           input.name,
           input.startTime,
           input.endTime,
-          input.type as "video" | "audio" | "text"
+          input.type as "video" | "audio" | "text",
+          input.opacity,
+          input.speed,
+          input.textContent,
+          input.textColor,
+          input.textSize
         );
       }),
 

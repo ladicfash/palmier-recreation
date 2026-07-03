@@ -6,7 +6,7 @@
 - [x] Resolve Home.tsx conflict (keep landing page or replace with editor dashboard)
 - [x] Set up database schema for projects, videos, clips, captions
 - [x] Implement user authentication and project ownership
-- [ ] Create file storage integration for video uploads
+- [x] Create file storage integration for video uploads (browser object URLs, no server upload needed)
 
 ### Phase 2: Video Upload & Timeline
 - [x] Build video upload component (MP4, WebM, MOV support)
@@ -16,10 +16,10 @@
 
 ### Phase 3: Core Editing Features
 - [x] Implement trim/cut functionality (Create Clip from trim points)
-- [ ] Add split clips feature
+- [x] Add split clips feature (Split at playhead button)
 - [x] Implement speed adjustment (0.5x - 2x with live playback)
 - [x] Add opacity/transparency control (live preview)
-- [ ] Build text overlay system with styling
+- [x] Build text overlay system with styling (color, font size, live preview)
 
 ### Phase 4: AI Features
 - [ ] Integrate Whisper API for auto-captioning (backend ready)
@@ -28,10 +28,10 @@
 - [x] Create scene detection visualization (backend ready)
 
 ### Phase 5: Export & Project Management
-- [ ] Build export dialog (full video + clip segments)
+- [x] Build export dialog (full video + clip segments + short-form)
 - [x] Implement project save/load system (Database + UI)
 - [x] Add project listing and management (Projects dropdown)
-- [ ] Create short-form clip export (TikTok/Reels dimensions)
+- [x] Create short-form clip export (9:16 / 1:1 / 16:9 via ExportDialog)
 
 ### Phase 6: Polish & Testing
 - [x] Add keyboard shortcuts (Space=play, arrows=seek, M=mute)
@@ -61,7 +61,7 @@
 - [x] Fix: Timeline - playhead syncs via onTimeUpdate event
 - [x] Fix: dotenv missing error - was from first cold start, resolved after pnpm install
 - [x] Add: Text overlay - renders on top of video with color/size controls
-- [ ] Add: Export - MediaRecorder-based trimmed video export
-- [ ] Add: Short-form clip export (9:16 aspect ratio)
+- [x] Add: Export - MediaRecorder-based trimmed video export (ExportDialog)
+- [x] Add: Short-form clip export (9:16 / 1:1 / 16:9 in ExportDialog)
 - [x] Add: Keyboard shortcuts (space=play/pause, left/right=seek, M=mute)
 - [ ] Add: Undo/redo for editing actions

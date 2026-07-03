@@ -2,10 +2,11 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { TimelineEditor } from "@/components/TimelineEditor";
+import { ExportDialog } from "@/components/ExportDialog";
 import {
   Upload, Play, Pause, Volume2, Download,
   Plus, Save, FolderOpen, Scissors, Type,
-  Zap, Film, ChevronRight, X, Loader2, AlertCircle
+  Zap, Film, ChevronRight, X, Loader2, AlertCircle, SplitSquareHorizontal
 } from "lucide-react";
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Link } from "wouter";
@@ -152,6 +153,7 @@ export default function Editor() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [exportingClipId, setExportingClipId] = useState<string | null>(null);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   // tRPC
   const createProject = trpc.projects.create.useMutation({
@@ -168,6 +170,9 @@ export default function Editor() {
   });
   const saveClipMutation = trpc.clips.create.useMutation({
     onError: (err) => console.warn("Clip DB save failed:", err.message),
+  });
+  const uploadVideoMutation = trpc.videos.upload.useMutation({
+    onError: (err) => console.warn("Video upload failed:", err.message),
   });
   const { data: projectList, isLoading: isLoadingProjects, error: projectListError } = trpc.projects.list.useQuery();
 
@@ -341,36 +346,111 @@ export default function Editor() {
   // ─── Project Save / Load ──────────────────────────────────────────────────────
   const saveProject = useCallback(async () => {
     if (!projectName.trim()) { toast.error("Enter a project name"); return; }
+    const toastId = toast.loading("Saving project...");
     try {
-      if (!projectDbId) {
+      let dbId = projectDbId;
+      if (!dbId) {
         const created = await createProject.mutateAsync({
           name: projectName.trim(),
           description: `${clips.length} clips, ${duration.toFixed(1)}s`,
         });
         if (created?.id) {
+          dbId = created.id;
           setProjectDbId(created.id);
-          toast.success("Project saved!");
         }
       } else {
         await updateProject.mutateAsync({
-          projectId: projectDbId,
+          projectId: dbId,
           name: projectName.trim(),
           duration,
         });
-        toast.success("Project updated!");
       }
+
+      // Upload video to S3 if we have a file and a project ID
+      if (dbId && videoFileRef.current) {
+        const file = videoFileRef.current;
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(",")[1] ?? "");
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        await uploadVideoMutation.mutateAsync({
+          projectId: dbId,
+          fileName: file.name,
+          fileData: base64,
+          mimeType: file.type || "video/mp4",
+        });
+      }
+
+      toast.dismiss(toastId);
+      toast.success("Project saved!");
     } catch {
+      toast.dismiss(toastId);
       // error handled in mutation onError
     }
-  }, [projectName, projectDbId, clips.length, duration, createProject, updateProject]);
+  }, [projectName, projectDbId, clips.length, duration, createProject, updateProject, uploadVideoMutation]);
 
-  const loadProjectFromDb = useCallback((proj: { id: number; name: string; duration: number | null }) => {
-    setProjectDbId(proj.id);
-    setProjectName(proj.name);
-    if (proj.duration) setDuration(proj.duration);
-    setShowProjects(false);
-    toast.success(`Loaded: ${proj.name}`);
-  }, []);
+  const loadProjectFromDb = useCallback(async (projId: number, projName: string) => {
+    const toastId = toast.loading(`Loading ${projName}...`);
+    try {
+      const full = await utils.projects.getFull.fetch({ projectId: projId });
+      if (!full) { toast.dismiss(toastId); toast.error("Project not found"); return; }
+
+      setProjectDbId(full.project.id);
+      setProjectName(full.project.name);
+      if (full.project.duration) setDuration(full.project.duration);
+
+      // Restore clips
+      if (full.clips.length > 0) {
+        setClips(full.clips.map(c => ({
+          id: `clip-${c.id}`,
+          name: c.name,
+          startTime: c.startTime / 1000,
+          endTime: c.endTime / 1000,
+          type: (c.type ?? "video") as "video" | "audio" | "text",
+          opacity: c.opacity ?? 1,
+          speed: c.speed ?? 1,
+        })));
+        if (full.project.duration) setTrimEnd(full.project.duration);
+      }
+
+      // Restore scene markers
+      if (full.scenes.length > 0) {
+        setScenes(full.scenes.map(s => ({
+          id: s.id,
+          timestamp: s.timestamp,
+          confidence: s.confidence ?? 0.5,
+        })));
+      }
+
+      // Restore video from S3 if available
+      if (full.project.videoUrl) {
+        try {
+          const resp = await fetch(full.project.videoUrl);
+          if (resp.ok) {
+            const blob = await resp.blob();
+            if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+            const url = URL.createObjectURL(blob);
+            setVideoObjectUrl(url);
+            setIsVideoLoading(true);
+          }
+        } catch {
+          toast.error("Could not restore video from storage. Please re-upload.");
+        }
+      }
+
+      setShowProjects(false);
+      toast.dismiss(toastId);
+      toast.success(`Loaded: ${full.project.name}`);
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error("Failed to load project: " + (err as Error).message);
+    }
+  }, [utils, videoObjectUrl]);
 
   const handleDeleteProject = useCallback(async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -467,15 +547,40 @@ export default function Editor() {
     }
   }, [videoObjectUrl, duration, currentTime]);
 
+  // ─── Split Clip at Playhead ───────────────────────────────────────────────────
+  const splitClipAtPlayhead = useCallback(() => {
+    if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
+    if (currentTime <= trimStart + 0.1 || currentTime >= trimEnd - 0.1) {
+      toast.error("Move the playhead between the trim start and end points to split");
+      return;
+    }
+    const clipA: TimelineClip = {
+      id: `clip-${Date.now()}-a`,
+      name: `Clip ${clips.length + 1}A`,
+      startTime: trimStart,
+      endTime: currentTime,
+      type: "video",
+      opacity,
+      speed,
+    };
+    const clipB: TimelineClip = {
+      id: `clip-${Date.now()}-b`,
+      name: `Clip ${clips.length + 1}B`,
+      startTime: currentTime,
+      endTime: trimEnd,
+      type: "video",
+      opacity,
+      speed,
+    };
+    setClips(prev => [...prev, clipA, clipB]);
+    toast.success(`Split into 2 clips at ${formatTime(currentTime)}`);
+  }, [videoObjectUrl, currentTime, trimStart, trimEnd, clips.length, opacity, speed]);
+
   // ─── Export Full Video ────────────────────────────────────────────────────────
   const exportVideo = useCallback(() => {
     if (!videoObjectUrl) { toast.error("No video to export"); return; }
-    const a = document.createElement("a");
-    a.href = videoObjectUrl;
-    a.download = `${projectName || "export"}.mp4`;
-    a.click();
-    toast.success("Downloading original video...");
-  }, [videoObjectUrl, projectName]);
+    setShowExportDialog(true);
+  }, [videoObjectUrl]);
 
   // ─── Export Trimmed Clip via MediaRecorder ────────────────────────────────────
   const exportClip = useCallback(async (clip: TimelineClip) => {
@@ -618,6 +723,18 @@ export default function Editor() {
               <Download className="w-3.5 h-3.5" />
               Export
             </Button>
+
+            {showExportDialog && (
+              <ExportDialog
+                open={showExportDialog}
+                onClose={() => setShowExportDialog(false)}
+                videoRef={videoRef}
+                videoObjectUrl={videoObjectUrl}
+                projectName={projectName}
+                clips={clips}
+                duration={duration}
+              />
+            )}
           </div>
         </div>
 
@@ -643,7 +760,7 @@ export default function Editor() {
                 {projectList.map(proj => (
                   <div
                     key={proj.id}
-                    onClick={() => loadProjectFromDb(proj)}
+                    onClick={() => loadProjectFromDb(proj.id, proj.name)}
                     className={`flex items-center gap-2 px-3 py-2 rounded border cursor-pointer hover:bg-accent/10 transition-colors text-sm ${projectDbId === proj.id ? "border-accent bg-accent/10" : "border-border"}`}
                   >
                     <Film className="w-3.5 h-3.5 text-accent" />
@@ -922,15 +1039,27 @@ export default function Editor() {
                         Duration: <span className="text-accent font-mono">{formatTime(trimEnd - trimStart)}</span>
                       </div>
                     )}
-                    <Button
-                      size="sm"
-                      variant="default"
-                      className="w-full h-8 text-xs gap-1.5"
-                      onClick={createClip}
-                      disabled={!videoObjectUrl}
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Create Clip
-                    </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-8 text-xs gap-1"
+                        onClick={createClip}
+                        disabled={!videoObjectUrl}
+                      >
+                        <Plus className="w-3 h-3" /> Create Clip
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs gap-1"
+                        onClick={splitClipAtPlayhead}
+                        disabled={!videoObjectUrl}
+                        title="Split trim region at current playhead position"
+                      >
+                        <SplitSquareHorizontal className="w-3 h-3" /> Split
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
