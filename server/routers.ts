@@ -1,10 +1,12 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
+import { z } from "zod";
+import * as db from "./db";
+import { transcribeAudio } from "./_core/voiceTranscription";
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
@@ -17,12 +19,123 @@ export const appRouter = router({
     }),
   }),
 
-  // TODO: add feature routers here, e.g.
-  // todo: router({
-  //   list: protectedProcedure.query(({ ctx }) =>
-  //     db.getUserTodos(ctx.user.id)
-  //   ),
-  // }),
+  projects: router({
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return db.createProject(ctx.user.id, input.name, input.description);
+      }),
+
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.getUserProjects(ctx.user.id);
+    }),
+
+    getById: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return db.getProjectById(input.projectId, ctx.user.id);
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+        name: z.string().optional(),
+        duration: z.number().optional(),
+        videoUrl: z.string().optional(),
+        videoKey: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { projectId, ...updates } = input;
+        return db.updateProject(projectId, ctx.user.id, updates);
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        return db.deleteProject(input.projectId, ctx.user.id);
+      }),
+  }),
+
+  captions: router({
+    generate: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+        audioUrl: z.string(),
+        language: z.string().default("en"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          const result = await transcribeAudio({
+            audioUrl: input.audioUrl,
+            language: input.language,
+          });
+
+          // Check if result is an error
+          if ('error' in result) {
+            throw new Error(result.error);
+          }
+
+          if (!result.text) {
+            throw new Error("Failed to transcribe audio");
+          }
+
+          const captions = [];
+          if (result.segments && Array.isArray(result.segments)) {
+            for (const segment of result.segments) {
+              const caption = await db.createCaption(
+                input.projectId,
+                Math.floor(segment.start * 1000),
+                Math.floor(segment.end * 1000),
+                segment.text,
+                input.language
+              );
+              captions.push(caption);
+            }
+          }
+
+          return {
+            success: true,
+            fullText: result.text,
+            captions,
+            language: result.language,
+          };
+        } catch (error) {
+          console.error("Caption generation error:", error);
+          throw new Error("Failed to generate captions");
+        }
+      }),
+
+    list: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return db.getProjectCaptions(input.projectId);
+      }),
+  }),
+
+  sceneDetection: router({
+    detect: protectedProcedure
+      .input(z.object({
+        projectId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Placeholder for scene detection
+        // In production, this would use computer vision to detect scene changes
+        return {
+          success: true,
+          message: "Scene detection coming soon - requires video processing backend",
+          scenes: [],
+        };
+      }),
+
+    list: protectedProcedure
+      .input(z.object({ projectId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return db.getProjectSceneDetections(input.projectId);
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

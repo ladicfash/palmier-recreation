@@ -94,11 +94,18 @@ export async function createProject(userId: number, name: string, description?: 
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  return db.insert(projects).values({
+  const result = await db.insert(projects).values({
     userId,
     name,
     description,
   });
+
+  // Fetch the created project
+  const created = await db.select().from(projects).where(
+    and(eq(projects.userId, userId), eq(projects.name, name))
+  ).orderBy(projects.id).limit(1);
+
+  return created.length > 0 ? created[0] : null;
 }
 
 export async function getUserProjects(userId: number) {

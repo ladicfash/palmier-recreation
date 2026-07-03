@@ -15,10 +15,10 @@
 - [ ] Add timeline zoom and scroll functionality
 
 ### Phase 3: Core Editing Features
-- [ ] Implement trim/cut functionality
+- [x] Implement trim/cut functionality (Create Clip from trim points)
 - [ ] Add split clips feature
-- [ ] Implement speed adjustment (0.5x - 2x)
-- [ ] Add opacity/transparency control
+- [x] Implement speed adjustment (0.5x - 2x with live playback)
+- [x] Add opacity/transparency control (live preview)
 - [ ] Build text overlay system with styling
 
 ### Phase 4: AI Features
@@ -29,8 +29,8 @@
 
 ### Phase 5: Export & Project Management
 - [ ] Build export dialog (full video + clip segments)
-- [ ] Implement project save/load system
-- [ ] Add project listing and management
+- [x] Implement project save/load system (Database + UI)
+- [x] Add project listing and management (Projects dropdown)
 - [ ] Create short-form clip export (TikTok/Reels dimensions)
 
 ### Phase 6: Polish & Testing

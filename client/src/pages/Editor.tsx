@@ -1,9 +1,11 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Upload, Play, Pause, Volume2, Settings, Download, Plus, Trash2 } from "lucide-react";
+import { Upload, Play, Pause, Volume2, Settings, Download, Plus, Trash2, Save, FolderOpen } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import { Link } from "wouter";
+import { toast } from "sonner";
 
 interface TimelineClip {
   id: string;
@@ -19,8 +21,15 @@ interface Project {
   id: string;
   name: string;
   videoFile?: File;
+  videoUrl?: string;
+  videoKey?: string;
   clips: TimelineClip[];
   duration: number;
+  speed: number;
+  opacity: number;
+  trimStart: number;
+  trimEnd: number;
+  dbId?: number;
 }
 
 /**
@@ -29,8 +38,8 @@ interface Project {
  * Main editor interface with:
  * - Video upload and preview
  * - Timeline scrubber
- * - Core editing controls
- * - Project management
+ * - Core editing controls (FUNCTIONAL)
+ * - Project management with database persistence
  */
 
 export default function Editor() {
@@ -40,12 +49,27 @@ export default function Editor() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+  const [showProjectDialog, setShowProjectDialog] = useState(false);
+  const [projectName, setProjectName] = useState("Untitled Project");
   const [project, setProject] = useState<Project>({
     id: "project-1",
     name: "Untitled Project",
     clips: [],
     duration: 0,
+    speed: 1,
+    opacity: 1,
+    trimStart: 0,
+    trimEnd: 0,
   });
+
+  // tRPC mutations and queries
+  const createProjectMutation = trpc.projects.create.useMutation();
+  const updateProjectMutation = trpc.projects.update.useMutation();
+  const listProjectsQuery = trpc.projects.list.useQuery();
+  const getProjectQuery = trpc.projects.getById.useQuery(
+    { projectId: project.dbId || 0 },
+    { enabled: !!project.dbId }
+  );
 
   // Redirect if not authenticated
   if (!isAuthenticated) {
@@ -70,6 +94,7 @@ export default function Editor() {
         videoFile: file,
         name: file.name.replace(/\.[^/.]+$/, ""),
       }));
+      setProjectName(file.name.replace(/\.[^/.]+$/, ""));
     }
   };
 
@@ -96,6 +121,7 @@ export default function Editor() {
       setProject(prev => ({
         ...prev,
         duration: videoRef.current?.duration || 0,
+        trimEnd: videoRef.current?.duration || 0,
       }));
     }
   };
@@ -108,6 +134,108 @@ export default function Editor() {
     }
   };
 
+  const handleSpeedChange = (newSpeed: number) => {
+    setProject(prev => ({ ...prev, speed: newSpeed }));
+    if (videoRef.current) {
+      videoRef.current.playbackRate = newSpeed;
+    }
+  };
+
+  const handleOpacityChange = (newOpacity: number) => {
+    setProject(prev => ({ ...prev, opacity: newOpacity }));
+  };
+
+  const handleTrimStart = (startTime: number) => {
+    setProject(prev => ({ ...prev, trimStart: startTime }));
+  };
+
+  const handleTrimEnd = (endTime: number) => {
+    setProject(prev => ({ ...prev, trimEnd: endTime }));
+  };
+
+  const applyTrim = () => {
+    if (videoRef.current && project.trimStart < project.trimEnd) {
+      videoRef.current.currentTime = project.trimStart;
+      const trimClip: TimelineClip = {
+        id: `clip-${Date.now()}`,
+        name: `Trimmed Clip ${project.clips.length + 1}`,
+        startTime: project.trimStart,
+        endTime: project.trimEnd,
+        type: 'video',
+        opacity: project.opacity,
+        speed: project.speed,
+      };
+      setProject(prev => ({
+        ...prev,
+        clips: [...prev.clips, trimClip],
+      }));
+      toast.success("Clip created!");
+    }
+  };
+
+  const saveProject = async () => {
+    try {
+      if (!project.name.trim()) {
+        toast.error("Project name cannot be empty");
+        return;
+      }
+
+      // If project doesn't have a database ID, create it
+      if (!project.dbId) {
+        const newProject = await createProjectMutation.mutateAsync({
+          name: project.name,
+          description: `Video duration: ${duration}s, ${project.clips.length} clips`,
+        });
+        
+        if (newProject) {
+          setProject(prev => ({
+            ...prev,
+            dbId: newProject.id,
+          }));
+        }
+        
+        toast.success("Project created!");
+      } else {
+        // Update existing project
+        await updateProjectMutation.mutateAsync({
+          projectId: project.dbId,
+          name: project.name,
+          duration: duration,
+        });
+        
+        toast.success("Project saved!");
+      }
+
+      // Save to localStorage as backup
+      localStorage.setItem(`pixelcraft-project-${project.id}`, JSON.stringify({
+        ...project,
+        videoFile: null, // Don't save file object
+      }));
+    } catch (error) {
+      console.error("Save error:", error);
+      toast.error("Failed to save project");
+    }
+  };
+
+  const loadProject = async (projectId: number) => {
+    try {
+      const dbProject = await getProjectQuery.refetch();
+      if (dbProject.data) {
+        const proj = dbProject.data;
+        setProject(prev => ({
+          ...prev,
+          name: proj.name,
+          duration: proj.duration || 0,
+          dbId: proj.id,
+        }));
+        toast.success("Project loaded!");
+      }
+    } catch (error) {
+      console.error("Load error:", error);
+      toast.error("Failed to load project");
+    }
+  };
+
   const formatTime = (time: number) => {
     if (!time || isNaN(time)) return "0:00";
     const minutes = Math.floor(time / 60);
@@ -115,7 +243,7 @@ export default function Editor() {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  const videoUrl = project.videoFile ? URL.createObjectURL(project.videoFile) : null;
+  const videoUrl = project.videoFile ? URL.createObjectURL(project.videoFile) : project.videoUrl;
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -131,17 +259,71 @@ export default function Editor() {
             </div>
           </Link>
 
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={project.name}
+              onChange={(e) => setProject(prev => ({ ...prev, name: e.target.value }))}
+              className="bg-background border border-border rounded px-3 py-1 text-sm max-w-xs"
+              placeholder="Project name"
+            />
+          </div>
+
           <div className="flex items-center gap-4">
-            <div className="text-sm text-muted-foreground">
-              {project.name}
-            </div>
-            <Button size="sm" variant="outline">Save Project</Button>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={saveProject}
+              disabled={createProjectMutation.isPending || updateProjectMutation.isPending}
+              className="flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              Save
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => setShowProjectDialog(!showProjectDialog)}
+              className="flex items-center gap-2"
+            >
+              <FolderOpen className="w-4 h-4" />
+              Projects
+            </Button>
             <Button size="sm" variant="outline">
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
           </div>
         </div>
+
+        {/* Projects Dialog */}
+        {showProjectDialog && (
+          <div className="border-t border-border bg-card/30 p-4">
+            <div className="max-w-7xl mx-auto">
+              <h3 className="text-sm font-semibold mb-3">Your Projects</h3>
+              {listProjectsQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading projects...</p>
+              ) : listProjectsQuery.data && listProjectsQuery.data.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {listProjectsQuery.data.map((proj) => (
+                    <button
+                      key={proj.id}
+                      onClick={() => loadProject(proj.id)}
+                      className="text-left p-3 rounded border border-border hover:bg-card/50 transition-colors"
+                    >
+                      <p className="text-sm font-medium">{proj.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {proj.duration ? `${proj.duration.toFixed(1)}s` : "No duration"}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No projects yet. Create one by saving!</p>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Editor */}
@@ -157,6 +339,9 @@ export default function Editor() {
                   ref={videoRef}
                   src={videoUrl}
                   className="w-full aspect-video bg-black"
+                  style={{
+                    opacity: project.opacity,
+                  }}
                   onTimeUpdate={handleTimeUpdate}
                   onLoadedMetadata={handleLoadedMetadata}
                 />
@@ -242,10 +427,10 @@ export default function Editor() {
           <div>
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <Plus className="w-4 h-4" />
-              Clips
+              Clips ({project.clips.length})
             </h3>
             {project.clips.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No clips yet. Upload a video to get started.</p>
+              <p className="text-sm text-muted-foreground">No clips yet. Use trim controls to create clips.</p>
             ) : (
               <div className="space-y-2">
                 {project.clips.map((clip) => (
@@ -253,7 +438,7 @@ export default function Editor() {
                     <div className="flex-1">
                       <p className="text-sm font-medium">{clip.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {formatTime(clip.startTime)} - {formatTime(clip.endTime)}
+                        {formatTime(clip.startTime)} - {formatTime(clip.endTime)} ({clip.speed.toFixed(1)}x, {Math.round(clip.opacity * 100)}%)
                       </p>
                     </div>
                     <Button
@@ -279,53 +464,58 @@ export default function Editor() {
         <div className="w-64 border-l border-border bg-card/30 p-4 overflow-auto">
           <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
             <Settings className="w-5 h-5" />
-            Tools
+            Editing Tools
           </h2>
 
           <div className="space-y-6">
             {/* Trim Section */}
             <div>
-              <h3 className="text-sm font-semibold mb-3">Trim</h3>
+              <h3 className="text-sm font-semibold mb-3">Trim & Create Clip</h3>
               <div className="space-y-2">
                 <div>
-                  <label className="text-xs text-muted-foreground">Start Time</label>
+                  <label className="text-xs text-muted-foreground">Start Time (s)</label>
                   <input
                     type="number"
                     min="0"
                     max={duration}
                     step="0.1"
-                    placeholder="0"
+                    value={project.trimStart}
+                    onChange={(e) => handleTrimStart(parseFloat(e.target.value))}
                     className="w-full bg-background border border-border rounded px-2 py-1 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">End Time</label>
+                  <label className="text-xs text-muted-foreground">End Time (s)</label>
                   <input
                     type="number"
                     min="0"
                     max={duration}
                     step="0.1"
-                    placeholder={duration.toString()}
+                    value={project.trimEnd || duration}
+                    onChange={(e) => handleTrimEnd(parseFloat(e.target.value))}
                     className="w-full bg-background border border-border rounded px-2 py-1 text-sm"
                   />
                 </div>
-                <Button size="sm" variant="outline" className="w-full">Apply Trim</Button>
+                <Button size="sm" variant="outline" className="w-full" onClick={applyTrim}>
+                  Create Clip
+                </Button>
               </div>
             </div>
 
             {/* Speed Section */}
             <div>
-              <h3 className="text-sm font-semibold mb-3">Speed</h3>
+              <h3 className="text-sm font-semibold mb-3">Playback Speed</h3>
               <div className="space-y-2">
                 <input
                   type="range"
                   min="0.5"
                   max="2"
                   step="0.1"
-                  defaultValue="1"
+                  value={project.speed}
+                  onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
                   className="w-full"
                 />
-                <p className="text-xs text-muted-foreground text-center">1.0x</p>
+                <p className="text-xs text-muted-foreground text-center">{project.speed.toFixed(1)}x</p>
               </div>
             </div>
 
@@ -338,10 +528,11 @@ export default function Editor() {
                   min="0"
                   max="1"
                   step="0.1"
-                  defaultValue="1"
+                  value={project.opacity}
+                  onChange={(e) => handleOpacityChange(parseFloat(e.target.value))}
                   className="w-full"
                 />
-                <p className="text-xs text-muted-foreground text-center">100%</p>
+                <p className="text-xs text-muted-foreground text-center">{Math.round(project.opacity * 100)}%</p>
               </div>
             </div>
 
