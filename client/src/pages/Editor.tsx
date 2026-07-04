@@ -1662,6 +1662,9 @@ export default function Editor() {
               </div>
             )}
           </div>
+
+          {/* ── Inspector Sidebar Partner Ad Placement ── */}
+          <EditorAdBanner position="sidebar" />
         </div>
       </div>
 

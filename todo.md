@@ -182,6 +182,8 @@
 - [x] **Precision Zoom Controls**: Added precision zoom buttons (`+`, `-`, `Fit to View`) and timestamp/frame HUD to editor timeline.
 - [x] **Type Safety & Build Verification**: All TypeScript and bundling checks verified clean (`npx pnpm check` & `npx pnpm build`).
 
-## Phase 26: Emoji Elimination & Typography Clean-Up
-- [x] **UI Emoji Removal**: Removed all emojis across UI components (`Editor.tsx`, `LayerCompositor.tsx`, `LayerPanel.tsx`, `ColorGradingPanel.tsx`, `EditorAdBanner.tsx`) in favor of clean Lucide icons and professional typographic badges.
-- [x] **100% Green Suite Verification**: Re-verified clean production build (`npx pnpm build`), zero TypeScript errors (`npx pnpm check`), and 12/12 passing unit tests (`npx pnpm test`).
+## Phase 27: Favicon Verification & Sidebar Ad Expansion
+- [x] **Favicon Verified Untouched**: Confirmed `/manus-storage/pixelcraft-favicon_10eda8dc.png` is preserved intact in `client/index.html`.
+- [x] **Expanded Inspector Sidebar Ad Slot**: Created dedicated 300x250 medium rectangle placement (`<EditorAdBanner position="sidebar" />`) at the bottom of the right-hand studio inspector sidebar inside `Editor.tsx`.
+- [x] **Dual Bottom Leaderboard Strip**: Expanded bottom ad bar below editing timeline (`position="bottom"`) from height `h-16` to `h-24` with generous multi-slot visual dimensions.
+- [x] **Green Verification Pass**: Re-verified clean production build (`npx pnpm build`), zero TypeScript errors (`npx pnpm check`), and 12/12 passing unit tests (`npx pnpm test`).
