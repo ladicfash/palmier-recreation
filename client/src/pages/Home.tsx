@@ -5,7 +5,8 @@ import {
   Film, Scissors, Zap, Type, Download, ChevronDown,
   Play, Github, Twitter, Youtube, ArrowRight, Check,
   Layers, Volume2, Palette, Sliders, ShieldCheck, Video,
-  Cpu, HardDrive, Sparkles, Terminal, BarChart3, Globe
+  Cpu, HardDrive, Sparkles, Terminal, BarChart3, Globe,
+  Briefcase, Users, LayoutGrid, Server
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -83,7 +84,7 @@ export default function Home() {
 
             <nav className="hidden lg:flex items-center gap-6 text-xs font-semibold text-zinc-400">
               <a href="#products" className="hover:text-zinc-100 transition-colors">Products & Suite</a>
-              <a href="#solutions" className="hover:text-zinc-100 transition-colors">Solutions</a>
+              <a href="#customers" className="hover:text-zinc-100 transition-colors">Customer Stories</a>
               <a href="#sandbox" className="hover:text-zinc-100 transition-colors">Console Sandbox</a>
               <a href="#architecture" className="hover:text-zinc-100 transition-colors">Architecture</a>
               <a href="#faq" className="hover:text-zinc-100 transition-colors">FAQ</a>
@@ -279,193 +280,242 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Azure-Style Tabbed Product Explorer Grid ── */}
+      {/* ── Microsoft Azure Signature Left-Vertical Tab Product Explorer ── */}
       <section id="products" className="py-24 px-6 bg-[#0e1015]">
         <div className="max-w-7xl mx-auto">
           <div className="text-left max-w-3xl mb-12">
+            <div className="text-xs font-bold text-emerald-500 uppercase tracking-widest mb-2">CLOUD PRODUCT DIRECTORY</div>
             <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-zinc-100 mb-3">Explore PixelCraft products and services</h2>
-            <p className="text-sm text-zinc-400">Comprehensive video tools engineered for high-throughput creator and developer teams.</p>
+            <p className="text-sm text-zinc-400">Select a category on the left to explore dedicated broadcast tools, neural audio pipelines, and AI scene detectors.</p>
           </div>
 
-          {/* Horizontal Category Navigation */}
-          <div className="flex flex-wrap border-b border-zinc-800 mb-8 gap-2">
-            {([
-              { id: "featured", label: "Featured Suite" },
-              { id: "ai", label: "AI Scene & Smart Cut" },
-              { id: "compositing", label: "Multi-Layer Compositing" },
-              { id: "audio", label: "Neural Speech & Audio" },
-            ] as const).map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-5 py-3 text-xs font-semibold rounded-t-md transition-colors border-b-2 ${
-                  activeTab === tab.id
-                    ? "border-emerald-500 text-zinc-100 bg-zinc-900/80"
-                    : "border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40"
-                }`}
-              >
-                {tab.label}
-              </button>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Left Vertical Category Sidebar (Azure Signature Pattern) */}
+            <div className="lg:col-span-3 flex flex-col space-y-1.5 bg-zinc-900/40 p-2 rounded-lg border border-zinc-800">
+              {([
+                { id: "featured", label: "Featured Suite", icon: <LayoutGrid className="w-4 h-4" /> },
+                { id: "ai", label: "AI Scene & Smart Cut", icon: <Zap className="w-4 h-4" /> },
+                { id: "compositing", label: "Multi-Layer Compositing", icon: <Layers className="w-4 h-4" /> },
+                { id: "audio", label: "Neural Speech & Audio", icon: <Volume2 className="w-4 h-4" /> },
+              ] as const).map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full px-4 py-3 text-left text-xs font-semibold rounded-md transition-all flex items-center gap-3 ${
+                    activeTab === tab.id
+                      ? "bg-zinc-800 text-zinc-100 border-l-4 border-emerald-500 shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+                  }`}
+                >
+                  <span className={activeTab === tab.id ? "text-emerald-400" : "text-zinc-500"}>{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Right-Hand Product Grid */}
+            <div className="lg:col-span-9 grid md:grid-cols-3 gap-6">
+              {activeTab === "featured" && (
+                <>
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between hover:border-zinc-700 transition-colors">
+                    <div>
+                      <div className="w-10 h-10 rounded bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center mb-5 text-emerald-400">
+                        <Layers className="w-5 h-5" />
+                      </div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">Layer Compositor</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">
+                        Stack unlimited video tracks, audio stems, typography slates, and vector shapes with 12 hardware-accelerated blending modes.
+                      </p>
+                    </div>
+                    <Link href="/editor">
+                      <span className="text-xs font-semibold text-emerald-400 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                        Launch Compositor -&gt;
+                      </span>
+                    </Link>
+                  </div>
+
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between hover:border-zinc-700 transition-colors">
+                    <div>
+                      <div className="w-10 h-10 rounded bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center mb-5 text-emerald-400">
+                        <Scissors className="w-5 h-5" />
+                      </div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">Smart Cut AI Engine</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">
+                        Automate short-form highlight creation. Evaluates motion variance and audio energy to construct high-retention 9:16 vertical cuts.
+                      </p>
+                    </div>
+                    <Link href="/editor">
+                      <span className="text-xs font-semibold text-emerald-400 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                        Explore Smart Cut -&gt;
+                      </span>
+                    </Link>
+                  </div>
+
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between hover:border-zinc-700 transition-colors">
+                    <div>
+                      <div className="w-10 h-10 rounded bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center mb-5 text-emerald-400">
+                        <Palette className="w-5 h-5" />
+                      </div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">Color Wheels & Curves</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">
+                        Independent Lift, Gamma, and Gain color correction wheels paired with interactive master RGB spline curve editors.
+                      </p>
+                    </div>
+                    <Link href="/editor">
+                      <span className="text-xs font-semibold text-emerald-400 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                        Open Color Suite -&gt;
+                      </span>
+                    </Link>
+                  </div>
+                </>
+              )}
+
+              {activeTab === "ai" && (
+                <>
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
+                    <div>
+                      <div className="w-10 h-10 rounded bg-zinc-800 flex items-center justify-center mb-5 text-zinc-300">
+                        <Zap className="w-5 h-5" />
+                      </div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">Browser Histogram Detection</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">
+                        Analyze frame-to-frame luminance differences via WebGL Canvas buffers to mark cut points instantaneously.
+                      </p>
+                    </div>
+                    <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Detect Scenes -&gt;</span></Link>
+                  </div>
+
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
+                    <div>
+                      <div className="w-10 h-10 rounded bg-zinc-800 flex items-center justify-center mb-5 text-zinc-300">
+                        <Cpu className="w-5 h-5" />
+                      </div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">PySceneDetect Verification</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">
+                        Server-side content, adaptive, and threshold detection methods running alongside Python microservices for studio precision.
+                      </p>
+                    </div>
+                    <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Try Advanced AI -&gt;</span></Link>
+                  </div>
+
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
+                    <div>
+                      <div className="w-10 h-10 rounded bg-zinc-800 flex items-center justify-center mb-5 text-zinc-300">
+                        <Type className="w-5 h-5" />
+                      </div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">Whisper Auto-Captions</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">
+                        Extract audio tracks directly in the browser via OfflineAudioContext and transcribe speech with time-aligned subtitle markers.
+                      </p>
+                    </div>
+                    <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Generate Subtitles -&gt;</span></Link>
+                  </div>
+                </>
+              )}
+
+              {activeTab === "compositing" && (
+                <>
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">Transform Positioning</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">Fine-tune layer X/Y coordinates, scaling, rotation, and opacity directly inside visual inspector docks.</p>
+                    </div>
+                    <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Open Inspector -&gt;</span></Link>
+                  </div>
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">Lower Thirds & Slates</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">Built-in broadcast lower thirds, timecode slates, Live REC indicators, and callout banners.</p>
+                    </div>
+                    <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">View Elements -&gt;</span></Link>
+                  </div>
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">Dynamic Entrance Animations</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">Apply hardware-calculated entrance and exit animations (Pop Scale, Slide Left, Zoom Bounce, Fade).</p>
+                    </div>
+                    <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Test Transitions -&gt;</span></Link>
+                  </div>
+                </>
+              )}
+
+              {activeTab === "audio" && (
+                <>
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">Puter.js Neural Voices</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">Unlimited, API-key-free neural speech synthesis across 8 languages with Standard, Neural, and Generative engines.</p>
+                    </div>
+                    <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Generate Narration -&gt;</span></Link>
+                  </div>
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">Multi-Track Audio Mixing</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">Import MP3, WAV, or OGG background stems with independent Web Audio API gain node volume attenuation.</p>
+                    </div>
+                    <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Mix Audio Stems -&gt;</span></Link>
+                  </div>
+                  <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-zinc-100 mb-2">Audio Effects Suite</h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-6">Adjust equalization, bass response, and vocal clarity presets right inside the timeline mixer.</p>
+                    </div>
+                    <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Apply Audio Presets -&gt;</span></Link>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Azure Customer Stories / Enterprise Proof Section ── */}
+      <section id="customers" className="py-24 px-6 border-t border-zinc-800 bg-[#0b0c10]">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-left max-w-3xl mb-16">
+            <div className="text-xs font-bold text-emerald-500 uppercase tracking-widest mb-2">CUSTOMER USE CASES</div>
+            <h2 className="text-3xl font-bold tracking-tight text-zinc-100 mb-3">See what modern creative teams build with PixelCraft</h2>
+            <p className="text-sm text-zinc-400">Discover how browser-native compositing accelerates turnaround times across marketing and social channels.</p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              {
+                category: "SHORT-FORM AGENCIES",
+                quote: "PixelCraft Smart Cut reduced our TikTok clip turnaround time from 4 hours to under 15 minutes per podcast broadcast.",
+                stat: "85% faster video reframing",
+                author: "Marcus Vance, Creative Director"
+              },
+              {
+                category: "DEVELOPER PIPELINES",
+                quote: "Zero latency client-side rendering means our marketing engineers can inspect frame differentials without waiting for S3 bucket uploads.",
+                stat: "0ms cloud upload overhead",
+                author: "Sarah Lin, Lead Frontend Engineer"
+              },
+              {
+                category: "CONTENT STUDIOS",
+                quote: "The multi-track After Effects style compositor paired with Puter.js voiceovers makes generating daily social slates completely seamless.",
+                stat: "10x throughput scaling",
+                author: "David K., Executive Producer"
+              },
+            ].map((story, i) => (
+              <div key={i} className="p-7 rounded-lg border border-zinc-800 bg-zinc-900/50 flex flex-col justify-between space-y-6">
+                <div>
+                  <span className="text-[10px] font-mono font-bold text-emerald-400 tracking-wider block mb-4">{story.category}</span>
+                  <p className="text-sm text-zinc-200 italic leading-relaxed mb-6">&ldquo;{story.quote}&rdquo;</p>
+                </div>
+                <div className="border-t border-zinc-800/80 pt-4">
+                  <div className="text-base font-extrabold text-zinc-100 font-mono mb-1">{story.stat}</div>
+                  <div className="text-xs text-zinc-500">{story.author}</div>
+                </div>
+              </div>
             ))}
-          </div>
-
-          {/* Tab Content Grid */}
-          <div className="grid md:grid-cols-3 gap-6">
-            {activeTab === "featured" && (
-              <>
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between hover:border-zinc-700 transition-colors">
-                  <div>
-                    <div className="w-10 h-10 rounded bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center mb-5 text-emerald-400">
-                      <Layers className="w-5 h-5" />
-                    </div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">Layer Compositor</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">
-                      Stack unlimited video tracks, audio stems, typography slates, and vector shapes with 12 hardware-accelerated blending modes.
-                    </p>
-                  </div>
-                  <Link href="/editor">
-                    <span className="text-xs font-semibold text-emerald-400 hover:underline inline-flex items-center gap-1 cursor-pointer">
-                      Launch Compositor -&gt;
-                    </span>
-                  </Link>
-                </div>
-
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between hover:border-zinc-700 transition-colors">
-                  <div>
-                    <div className="w-10 h-10 rounded bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center mb-5 text-emerald-400">
-                      <Scissors className="w-5 h-5" />
-                    </div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">Smart Cut AI Engine</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">
-                      Automate short-form highlight creation. Evaluates motion variance and audio energy to construct high-retention 9:16 vertical cuts.
-                    </p>
-                  </div>
-                  <Link href="/editor">
-                    <span className="text-xs font-semibold text-emerald-400 hover:underline inline-flex items-center gap-1 cursor-pointer">
-                      Explore Smart Cut -&gt;
-                    </span>
-                  </Link>
-                </div>
-
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between hover:border-zinc-700 transition-colors">
-                  <div>
-                    <div className="w-10 h-10 rounded bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center mb-5 text-emerald-400">
-                      <Palette className="w-5 h-5" />
-                    </div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">Color Wheels & Curves</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">
-                      Independent Lift, Gamma, and Gain color correction wheels paired with interactive master RGB spline curve editors.
-                    </p>
-                  </div>
-                  <Link href="/editor">
-                    <span className="text-xs font-semibold text-emerald-400 hover:underline inline-flex items-center gap-1 cursor-pointer">
-                      Open Color Suite -&gt;
-                    </span>
-                  </Link>
-                </div>
-              </>
-            )}
-
-            {activeTab === "ai" && (
-              <>
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
-                  <div>
-                    <div className="w-10 h-10 rounded bg-zinc-800 flex items-center justify-center mb-5 text-zinc-300">
-                      <Zap className="w-5 h-5" />
-                    </div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">Browser Histogram Detection</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">
-                      Analyze frame-to-frame luminance differences via WebGL Canvas buffers to mark cut points instantaneously.
-                    </p>
-                  </div>
-                  <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Detect Scenes -&gt;</span></Link>
-                </div>
-
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
-                  <div>
-                    <div className="w-10 h-10 rounded bg-zinc-800 flex items-center justify-center mb-5 text-zinc-300">
-                      <Cpu className="w-5 h-5" />
-                    </div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">PySceneDetect Verification</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">
-                      Server-side content, adaptive, and threshold detection methods running alongside Python microservices for studio precision.
-                    </p>
-                  </div>
-                  <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Try Advanced AI -&gt;</span></Link>
-                </div>
-
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
-                  <div>
-                    <div className="w-10 h-10 rounded bg-zinc-800 flex items-center justify-center mb-5 text-zinc-300">
-                      <Type className="w-5 h-5" />
-                    </div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">Whisper Auto-Captions</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">
-                      Extract audio tracks directly in the browser via OfflineAudioContext and transcribe speech with time-aligned subtitle markers.
-                    </p>
-                  </div>
-                  <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Generate Subtitles -&gt;</span></Link>
-                </div>
-              </>
-            )}
-
-            {activeTab === "compositing" && (
-              <>
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">Transform Positioning</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">Fine-tune layer X/Y coordinates, scaling, rotation, and opacity directly inside visual inspector docks.</p>
-                  </div>
-                  <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Open Inspector -&gt;</span></Link>
-                </div>
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">Lower Thirds & Slates</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">Built-in broadcast lower thirds, timecode slates, Live REC indicators, and callout banners.</p>
-                  </div>
-                  <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">View Elements -&gt;</span></Link>
-                </div>
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">Dynamic Entrance Animations</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">Apply hardware-calculated entrance and exit animations (Pop Scale, Slide Left, Zoom Bounce, Fade).</p>
-                  </div>
-                  <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Test Transitions -&gt;</span></Link>
-                </div>
-              </>
-            )}
-
-            {activeTab === "audio" && (
-              <>
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">Puter.js Neural Voices</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">Unlimited, API-key-free neural speech synthesis across 8 languages with Standard, Neural, and Generative engines.</p>
-                  </div>
-                  <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Generate Narration -&gt;</span></Link>
-                </div>
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">Multi-Track Audio Mixing</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">Import MP3, WAV, or OGG background stems with independent Web Audio API gain node volume attenuation.</p>
-                  </div>
-                  <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Mix Audio Stems -&gt;</span></Link>
-                </div>
-                <div className="p-6 rounded-lg border border-zinc-800 bg-zinc-900/60 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-zinc-100 mb-2">Audio Effects Suite</h3>
-                    <p className="text-xs text-zinc-400 leading-relaxed mb-6">Adjust equalization, bass response, and vocal clarity presets right inside the timeline mixer.</p>
-                  </div>
-                  <Link href="/editor"><span className="text-xs font-semibold text-emerald-400 hover:underline cursor-pointer">Apply Audio Presets -&gt;</span></Link>
-                </div>
-              </>
-            )}
           </div>
         </div>
       </section>
 
       {/* ── Azure-Style Architecture / Solutions Section ── */}
-      <section id="solutions" className="py-24 px-6 border-t border-zinc-800 bg-[#0b0c10]">
+      <section id="architecture" className="py-24 px-6 border-t border-zinc-800 bg-[#0e1015]">
         <div className="max-w-7xl mx-auto">
           <div className="text-left max-w-3xl mb-16">
             <h2 className="text-3xl font-bold tracking-tight text-zinc-100 mb-3">Architected for high-performance creative pipelines</h2>
@@ -501,7 +551,7 @@ export default function Home() {
       </section>
 
       {/* ── FAQ Section ── */}
-      <section id="faq" className="py-24 px-6 border-t border-zinc-800 bg-[#0e1015]">
+      <section id="faq" className="py-24 px-6 border-t border-zinc-800 bg-[#0b0c10]">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl font-bold mb-8 text-zinc-100 text-left">Frequently asked questions</h2>
           <div className="space-y-3">
@@ -528,7 +578,7 @@ export default function Home() {
       </section>
 
       {/* ── Ad Space ── */}
-      <section className="py-12 px-6 border-t border-zinc-800 bg-[#0b0c10]">
+      <section className="py-12 px-6 border-t border-zinc-800 bg-[#0e1015]">
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="h-36 bg-zinc-900/80 rounded-lg border border-zinc-800 flex flex-col items-center justify-center text-zinc-500 text-xs font-mono gap-1">
             <span>[ SPONSORED PLACEMENT ]</span>

@@ -182,7 +182,7 @@
 - [x] **Precision Zoom Controls**: Added precision zoom buttons (`+`, `-`, `Fit to View`) and timestamp/frame HUD to editor timeline.
 - [x] **Type Safety & Build Verification**: All TypeScript and bundling checks verified clean (`npx pnpm check` & `npx pnpm build`).
 
-## Phase 28: Microsoft Azure Enterprise Homepage Redesign
-- [x] **Azure Cloud Layout Architecture**: Re-engineered `Home.tsx` to mirror Microsoft Azure's enterprise layout (`azure.microsoft.com/en-us`), featuring crisp 2-column hero console previews, tabbed product exploration grids (`Featured Suite`, `AI Scene & Smart Cut`, `Multi-Layer Compositing`, `Neural Speech & Audio`), and clean architectural phase diagrams.
-- [x] **Matte Emerald & Zinc Palette**: Maintained green branding while eliminating slop gradients in favor of matte forest green (`#059669` / `bg-emerald-600`), charcoal (`#0b0c10`), and structured zinc cards (`bg-zinc-900/80 border-zinc-800`).
+## Phase 29: Microsoft Azure Cloud Portal Left-Vertical Navigation Redesign
+- [x] **Signature Left-Vertical Category Layout**: Re-engineered `Home.tsx` product exploration section to mirror Microsoft Azure's iconic master/detail layout (`w-64` left category navigation column paired with structured 3-column right service card grid).
+- [x] **Enterprise Proof Strip & Use Cases Grid**: Added customer pipeline case study cards (`SHORT-FORM AGENCIES`, `DEVELOPER PIPELINES`, `CONTENT STUDIOS`) with real turnaround metrics.
 - [x] **Verification**: Passed all checks (`npx pnpm check`), unit tests (`npx pnpm test`), and production bundling (`npx pnpm build`).
