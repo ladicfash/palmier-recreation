@@ -12,9 +12,10 @@ interface LayerCompositorProps {
   isPlaying: boolean;
   selectedLayerId: string | null;
   onSelectLayer?: (id: string) => void;
+  speed?: number;
 }
 
-function VideoLayerEl({ layer, currentTime, isPlaying }: { layer: Layer; currentTime: number; isPlaying: boolean }) {
+function VideoLayerEl({ layer, currentTime, isPlaying, speed = 1 }: { layer: Layer; currentTime: number; isPlaying: boolean; speed?: number }) {
   const ref = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -32,12 +33,22 @@ function VideoLayerEl({ layer, currentTime, isPlaying }: { layer: Layer; current
     const el = ref.current;
     if (!el) return;
     const localTime = currentTime - layer.startTime;
-    if (localTime >= 0 && Math.abs(el.currentTime - localTime) > 0.35) {
-      el.currentTime = localTime;
-    } else if (localTime < 0 && el.currentTime !== 0) {
-      el.currentTime = 0;
+    if (localTime < 0) {
+      if (el.currentTime !== 0) el.currentTime = 0;
+      return;
     }
-  }, [currentTime, layer.startTime]);
+    const drift = el.currentTime - localTime;
+    if (Math.abs(drift) > 0.75 || !isPlaying) {
+      el.currentTime = localTime;
+      el.playbackRate = speed;
+    } else if (drift > 0.15) {
+      el.playbackRate = Math.max(0.25, speed * 0.95);
+    } else if (drift < -0.15) {
+      el.playbackRate = Math.min(4.0, speed * 1.05);
+    } else {
+      el.playbackRate = speed;
+    }
+  }, [currentTime, layer.startTime, isPlaying, speed]);
 
   useEffect(() => {
     const el = ref.current;
@@ -49,7 +60,7 @@ function VideoLayerEl({ layer, currentTime, isPlaying }: { layer: Layer; current
   return <video ref={ref} src={layer.src} className="w-full h-full object-contain rounded-lg shadow-xl" playsInline />;
 }
 
-function AudioLayerEl({ layer, currentTime, isPlaying }: { layer: Layer; currentTime: number; isPlaying: boolean }) {
+function AudioLayerEl({ layer, currentTime, isPlaying, speed = 1 }: { layer: Layer; currentTime: number; isPlaying: boolean; speed?: number }) {
   const ref = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
@@ -67,12 +78,22 @@ function AudioLayerEl({ layer, currentTime, isPlaying }: { layer: Layer; current
     const el = ref.current;
     if (!el) return;
     const localTime = currentTime - layer.startTime;
-    if (localTime >= 0 && Math.abs(el.currentTime - localTime) > 0.35) {
-      el.currentTime = localTime;
-    } else if (localTime < 0 && el.currentTime !== 0) {
-      el.currentTime = 0;
+    if (localTime < 0) {
+      if (el.currentTime !== 0) el.currentTime = 0;
+      return;
     }
-  }, [currentTime, layer.startTime]);
+    const drift = el.currentTime - localTime;
+    if (Math.abs(drift) > 0.75 || !isPlaying) {
+      el.currentTime = localTime;
+      el.playbackRate = speed;
+    } else if (drift > 0.15) {
+      el.playbackRate = Math.max(0.25, speed * 0.95);
+    } else if (drift < -0.15) {
+      el.playbackRate = Math.min(4.0, speed * 1.05);
+    } else {
+      el.playbackRate = speed;
+    }
+  }, [currentTime, layer.startTime, isPlaying, speed]);
 
   useEffect(() => {
     const el = ref.current;
@@ -164,14 +185,14 @@ function renderShapeContent(layer: Layer) {
 }
 
 export default function LayerCompositor({
-  layers, currentTime, isPlaying, selectedLayerId, onSelectLayer,
+  layers, currentTime, isPlaying, selectedLayerId, onSelectLayer, speed = 1,
 }: LayerCompositorProps) {
   return (
     <>
       {layers.map(layer => {
         const active = isLayerActiveAt(layer, currentTime);
         if (layer.type === "audio") {
-          return <AudioLayerEl key={layer.id} layer={layer} currentTime={currentTime} isPlaying={isPlaying} />;
+          return <AudioLayerEl key={layer.id} layer={layer} currentTime={currentTime} isPlaying={isPlaying} speed={speed} />;
         }
         if (!active) return null;
 
@@ -297,7 +318,7 @@ export default function LayerCompositor({
           if (!layer.src) return null;
           return (
             <div key={layer.id} style={{ ...style, width: "45%", aspectRatio: "16/9" }} onClick={e => { e.stopPropagation(); onSelectLayer?.(layer.id); }}>
-              <VideoLayerEl layer={layer} currentTime={currentTime} isPlaying={isPlaying} />
+              <VideoLayerEl layer={layer} currentTime={currentTime} isPlaying={isPlaying} speed={speed} />
             </div>
           );
         }

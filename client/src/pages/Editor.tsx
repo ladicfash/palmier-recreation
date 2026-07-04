@@ -180,6 +180,8 @@ export default function Editor() {
   const audioGainRef = useRef<GainNode | null>(null);
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const audioTrackGainsRef = useRef<Map<string, GainNode>>(new Map());
+  const activeBlobUrlsRef = useRef<Set<string>>(new Set());
+  const audioTracksRef = useRef<AudioTrack[]>([]);
 
   // Effects & Color Grading
   const [effects, setEffects] = useState<EffectSettings>(DEFAULT_EFFECTS);
@@ -397,12 +399,16 @@ export default function Editor() {
       e.target.value = "";
       return;
     }
-    if (videoObjectUrl && videoObjectUrl.startsWith("blob:")) URL.revokeObjectURL(videoObjectUrl);
+    if (videoObjectUrl && videoObjectUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(videoObjectUrl);
+      activeBlobUrlsRef.current.delete(videoObjectUrl);
+    }
     // Disconnect old audio graph so we can reconnect fresh
     audioSourceRef.current = null;
     audioGainRef.current = null;
     videoFileRef.current = file;
     const url = URL.createObjectURL(file);
+    activeBlobUrlsRef.current.add(url);
     setVideoObjectUrl(url);
     setProjectName(file.name.replace(/\.[^/.]+$/, ""));
     setIsVideoLoading(true); setIsPlaying(false);
@@ -411,7 +417,25 @@ export default function Editor() {
     e.target.value = "";
   }, [videoObjectUrl, projectDbId, projectList?.length]);
 
-  useEffect(() => () => { if (videoObjectUrl && videoObjectUrl.startsWith("blob:")) URL.revokeObjectURL(videoObjectUrl); }, []);
+  useEffect(() => {
+    audioTracksRef.current = audioTracks;
+  }, [audioTracks]);
+
+  useEffect(() => () => {
+    activeBlobUrlsRef.current.forEach(url => {
+      try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+    });
+    activeBlobUrlsRef.current.clear();
+    audioTracksRef.current.forEach(track => {
+      try { track.audioEl?.pause(); } catch { /* ignore */ }
+      if (track.objectUrl) {
+        try { URL.revokeObjectURL(track.objectUrl); } catch { /* ignore */ }
+      }
+    });
+    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+      try { audioCtxRef.current.close(); } catch { /* ignore */ }
+    }
+  }, []);
 
   // ─── Video Events ──────────────────────────────────────────────────────────
   const handleLoadedMetadata = useCallback(() => {
@@ -577,6 +601,7 @@ export default function Editor() {
       gain.connect(ctx.destination);
       const trackId = `audio-${Date.now()}`;
       audioTrackGainsRef.current.set(trackId, gain);
+      activeBlobUrlsRef.current.add(objectUrl);
 
       const newTrack: AudioTrack = {
         id: trackId, name: file.name,
@@ -588,6 +613,7 @@ export default function Editor() {
     } catch (err) {
       toast.error("Could not add audio track: " + (err as Error).message);
       URL.revokeObjectURL(objectUrl);
+      activeBlobUrlsRef.current.delete(objectUrl);
     }
   }, [initAudioContext]);
 
@@ -596,7 +622,10 @@ export default function Editor() {
       const track = prev.find(t => t.id === trackId);
       if (track) {
         track.audioEl?.pause();
-        if (track.objectUrl) URL.revokeObjectURL(track.objectUrl);
+        if (track.objectUrl) {
+          URL.revokeObjectURL(track.objectUrl);
+          activeBlobUrlsRef.current.delete(track.objectUrl);
+        }
         audioTrackGainsRef.current.delete(trackId);
       }
       return prev.filter(t => t.id !== trackId);
@@ -647,6 +676,7 @@ export default function Editor() {
       gain.connect(ctx.destination);
       const trackId = `audio-${Date.now()}`;
       audioTrackGainsRef.current.set(trackId, gain);
+      activeBlobUrlsRef.current.add(wavUrl);
       const newTrack: AudioTrack = {
         id: trackId, name: "Extracted Video Audio",
         duration: isFinite(audioEl.duration) ? audioEl.duration * 1000 : (duration || 10) * 1000,
@@ -1308,6 +1338,7 @@ export default function Editor() {
                   isPlaying={isPlaying}
                   selectedLayerId={selectedLayerId}
                   onSelectLayer={id => { setSelectedLayerId(id); setActivePanel("layers"); }}
+                  speed={speed}
                 />
               </>
             )}

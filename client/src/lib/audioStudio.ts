@@ -43,7 +43,13 @@ export function calculateDuckedVolume(
 export async function extractAudioFromVideoBlob(videoBlob: Blob): Promise<string> {
   const arrayBuffer = await videoBlob.arrayBuffer();
   const tempContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const audioBuffer = await tempContext.decodeAudioData(arrayBuffer);
+  let audioBuffer: AudioBuffer;
+  try {
+    audioBuffer = await tempContext.decodeAudioData(arrayBuffer);
+  } catch (err) {
+    tempContext.close();
+    throw new Error("No readable audio stream found in this video file.");
+  }
 
   const numChannels = audioBuffer.numberOfChannels;
   const sampleRate = audioBuffer.sampleRate;
@@ -73,13 +79,27 @@ export async function extractAudioFromVideoBlob(videoBlob: Blob): Promise<string
   writeString(36, "data");
   view.setUint32(40, length * numChannels * 2, true);
 
+  // Pre-fetch channel data arrays to avoid method call overhead in loop
+  const channelData: Float32Array[] = [];
+  for (let ch = 0; ch < numChannels; ch++) {
+    channelData.push(audioBuffer.getChannelData(ch));
+  }
+
   let offset = 44;
-  for (let i = 0; i < length; i++) {
-    for (let ch = 0; ch < numChannels; ch++) {
-      let sample = audioBuffer.getChannelData(ch)[i];
-      sample = Math.max(-1, Math.min(1, sample));
-      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
-      offset += 2;
+  const CHUNK_SIZE = 50000;
+  for (let i = 0; i < length; i += CHUNK_SIZE) {
+    const end = Math.min(length, i + CHUNK_SIZE);
+    for (let j = i; j < end; j++) {
+      for (let ch = 0; ch < numChannels; ch++) {
+        let sample = channelData[ch][j];
+        sample = Math.max(-1, Math.min(1, sample));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+        offset += 2;
+      }
+    }
+    // Yield to main event loop to prevent UI freezing on long videos
+    if (i + CHUNK_SIZE < length) {
+      await new Promise(resolve => setTimeout(resolve, 0));
     }
   }
 

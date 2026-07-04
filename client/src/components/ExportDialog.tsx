@@ -146,26 +146,39 @@ async function recordClip(
         reject(new Error("Invalid clip duration (end time must be greater than start time)"));
         return;
       }
-      let elapsed = 0;
-
-      const tick = setInterval(() => {
-        elapsed += 0.25;
-        onProgress(Math.min(99, Math.round((elapsed / clipDuration) * 100)));
-        if (elapsed >= clipDuration) {
-          clearInterval(tick);
-          videoEl.pause();
-          recorder.stop();
-        }
-      }, 250);
 
       videoEl.currentTime = startTime;
       videoEl.muted = false;
       videoEl.playbackRate = 1;
 
+      let isStopped = false;
+      const handleStopRecording = () => {
+        if (isStopped) return;
+        isStopped = true;
+        videoEl.removeEventListener("timeupdate", handleTimeUpdate);
+        videoEl.removeEventListener("ended", handleStopRecording);
+        videoEl.pause();
+        if (recorder.state === "recording" || recorder.state === "paused") {
+          recorder.stop();
+        }
+      };
+
+      const handleTimeUpdate = () => {
+        const curr = videoEl.currentTime;
+        const elapsed = Math.max(0, curr - startTime);
+        onProgress(Math.min(99, Math.round((elapsed / clipDuration) * 100)));
+        if (curr >= endTime) {
+          handleStopRecording();
+        }
+      };
+
       videoEl.onseeked = () => {
         recorder.start(100);
+        videoEl.addEventListener("timeupdate", handleTimeUpdate);
+        videoEl.addEventListener("ended", handleStopRecording);
         videoEl.play().catch(err => {
-          clearInterval(tick);
+          videoEl.removeEventListener("timeupdate", handleTimeUpdate);
+          videoEl.removeEventListener("ended", handleStopRecording);
           cleanupCanvas?.();
           reject(err);
         });

@@ -6,7 +6,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
 import { transcribeAudio } from "./_core/voiceTranscription";
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 import { join } from "path";
 import { tmpdir } from "os";
 import { writeFileSync, unlinkSync, existsSync } from "fs";
@@ -287,8 +287,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         try {
           const scriptPath = join(process.cwd(), "server", "scene_detection.py");
-          const command = `python3 "${scriptPath}" "${input.videoPath}" ${input.threshold} ${input.method}`;
-          const output = execSync(command, { encoding: "utf-8", timeout: 60000 });
+          const output = execFileSync("python3", [scriptPath, input.videoPath, String(input.threshold), input.method], { encoding: "utf-8", timeout: 60000 });
           const result = JSON.parse(output);
 
           if (!result.success) throw new Error(result.error || "Scene detection failed");
@@ -327,8 +326,7 @@ export const appRouter = router({
           writeFileSync(tmpPath, buffer);
 
           const scriptPath = join(process.cwd(), "server", "scene_detection.py");
-          const command = `python3 "${scriptPath}" "${tmpPath}" ${input.threshold} ${input.method}`;
-          const output = execSync(command, { encoding: "utf-8", timeout: 120000 });
+          const output = execFileSync("python3", [scriptPath, tmpPath, String(input.threshold), input.method], { encoding: "utf-8", timeout: 120000 });
           const result = JSON.parse(output);
 
           if (!result.success) throw new Error(result.error || "Scene detection failed");
@@ -370,6 +368,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const tmpPath = join(tmpdir(), `pixelcraft_smart_${ctx.user.id}_${Date.now()}.mp4`);
+        let scriptPath: string | null = null;
         try {
           const resolvedVideoUrl = await resolveStorageUrl(input.videoUrl);
           const response = await fetch(resolvedVideoUrl);
@@ -399,11 +398,10 @@ result = {
 
 print(json.dumps(result))
 `;
-          const scriptPath = join(tmpdir(), `smart_cut_${Date.now()}.py`);
+          scriptPath = join(tmpdir(), `smart_cut_${Date.now()}.py`);
           writeFileSync(scriptPath, pythonScript);
-          const output = execSync(`python3 "${scriptPath}"`, { encoding: "utf-8", timeout: 180000 });
+          const output = execFileSync("python3", [scriptPath], { encoding: "utf-8", timeout: 180000 });
           const result = JSON.parse(output);
-          unlinkSync(scriptPath);
 
           if (!result.success) throw new Error(result.error || "Smart cut failed");
 
@@ -419,6 +417,7 @@ print(json.dumps(result))
           throw new Error(`Smart cut failed: ${error instanceof Error ? error.message : "Unknown error"}`);
         } finally {
           if (existsSync(tmpPath)) unlinkSync(tmpPath);
+          if (scriptPath && existsSync(scriptPath)) unlinkSync(scriptPath);
         }
       }),
   }),
