@@ -11,6 +11,7 @@ import LayerPanel from "@/components/LayerPanel";
 import LayerCompositor from "@/components/LayerCompositor";
 import VoiceGenerationPanel from "@/components/VoiceGenerationPanel";
 import { Layer, LayerType, createLayer } from "@/lib/layers";
+import { detectScenesAdvanced } from "@/lib/advancedSceneDetection";
 import {
   Upload, Play, Pause, Volume2, VolumeX, Download,
   Save, FolderOpen, Scissors, Type,
@@ -46,6 +47,7 @@ interface SceneMarker {
   id: number;
   timestamp: number;
   confidence: number;
+  reason?: string;
 }
 
 interface Caption {
@@ -590,7 +592,7 @@ export default function Editor() {
   const [isDetectingAdvanced, setIsDetectingAdvanced] = useState(false);
   const [advancedMethod, setAdvancedMethod] = useState<"content" | "adaptive" | "threshold">("content");
 
-  const detectScenesAdvanced = useCallback(async () => {
+  const detectScenesWithPySceneDetect = useCallback(async () => {
     if (!projectVideoUrl) { toast.error("Save your project first to enable advanced detection"); return; }
     if (!projectDbId) { toast.error("Save your project first"); return; }
     setIsDetectingAdvanced(true);
@@ -687,59 +689,16 @@ export default function Editor() {
     }
   }, [projectVideoUrl, projectDbId, scenes, smartCutTarget, duration, smartCutMutation, saveClipMutation, pushHistory, captureSnapshot]);
 
-  // ─── Scene Detection ───────────────────────────────────────────────────────
-  const detectScenes = useCallback(async () => {
+  // ─── Scene Detection (Advanced: histogram + motion + audio) ───────────────────────────────────────────────────────
+  const detectScenesHistogram = useCallback(async () => {
     if (!videoObjectUrl) { toast.error("Upload a video first"); return; }
     const video = videoRef.current;
     if (!video || !isFinite(duration) || duration === 0) { toast.error("Video not ready"); return; }
 
     setIsDetectingScenes(true);
-    const toastId = toast.loading("Analyzing video for scene cuts...");
+    const toastId = toast.loading("Analyzing video (histogram + motion + audio)...");
     try {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas unavailable");
-      canvas.width = 160; canvas.height = 90;
-
-      const sampleInterval = Math.max(0.5, duration / 200);
-      const detected: SceneMarker[] = [{ id: 0, timestamp: 0, confidence: 1.0 }];
-      let prevHist: number[] | null = null;
-      const THRESHOLD = 22;
-
-      const getHist = (data: ImageData): number[] => {
-        const h = new Array(32).fill(0);
-        for (let i = 0; i < data.data.length; i += 4) {
-          const lum = Math.floor((data.data[i]! * 0.299 + data.data[i + 1]! * 0.587 + data.data[i + 2]! * 0.114) / 8);
-          h[Math.min(31, lum)]++;
-        }
-        return h;
-      };
-
-      const histDiff = (a: number[], b: number[]) =>
-        a.reduce((sum, v, i) => sum + Math.abs(v - (b[i] ?? 0)), 0) / (canvas.width * canvas.height);
-
-      const sampleFrame = (time: number): Promise<number[]> =>
-        new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error("Seek timeout")), 5000);
-          video.addEventListener("seeked", () => {
-            clearTimeout(timeout);
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            resolve(getHist(ctx.getImageData(0, 0, canvas.width, canvas.height)));
-          }, { once: true });
-          video.currentTime = time;
-        });
-
-      for (let t = sampleInterval; t < duration - sampleInterval; t += sampleInterval) {
-        const hist = await sampleFrame(t);
-        if (prevHist) {
-          const diff = histDiff(prevHist, hist);
-          if (diff > THRESHOLD) {
-            detected.push({ id: detected.length, timestamp: Math.round(t * 1000), confidence: Math.min(1, diff / 80) });
-          }
-        }
-        prevHist = hist;
-      }
-
+      const detected: SceneMarker[] = await detectScenesAdvanced(video, duration);
       video.currentTime = currentTime;
       pushHistory(captureSnapshot());
       setScenes(detected);
@@ -979,7 +938,7 @@ export default function Editor() {
             if (isPlaying) handlePlayPause();
             break;
           case "detect_scenes":
-            detectScenes();
+            detectScenesHistogram();
             break;
           case "generate_captions":
             generateCaptions();
@@ -1008,7 +967,7 @@ export default function Editor() {
     } finally {
       setIsChatLoading(false);
     }
-  }, [chatInput, isChatLoading, videoObjectUrl, duration, currentTime, clips, captions, scenes, trimStart, trimEnd, speed, opacity, isPlaying, chatbotMutation, handleTrimStart, handleTrimEnd, handleSpeedChange, handleOpacityChange, handleSeek, handlePlayPause, detectScenes, generateCaptions, createClip, splitClipAtPlayhead]);
+  }, [chatInput, isChatLoading, videoObjectUrl, duration, currentTime, clips, captions, scenes, trimStart, trimEnd, speed, opacity, isPlaying, chatbotMutation, handleTrimStart, handleTrimEnd, handleSpeedChange, handleOpacityChange, handleSeek, handlePlayPause, detectScenesHistogram, generateCaptions, createClip, splitClipAtPlayhead]);
 
   // Scroll chat to bottom
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
@@ -1331,7 +1290,7 @@ export default function Editor() {
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Scene Detection</label>
                   <p className="text-xs text-muted-foreground mb-2">Analyzes brightness changes to find scene cuts automatically.</p>
-                  <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={detectScenes} disabled={!videoObjectUrl || isDetectingScenes}>
+                  <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={detectScenesHistogram} disabled={!videoObjectUrl || isDetectingScenes}>
                     {isDetectingScenes ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Detecting...</> : <><Zap className="w-3.5 h-3.5" /> Detect Scenes</>}
                   </Button>
                   {scenes.length > 0 && (
@@ -1356,7 +1315,7 @@ export default function Editor() {
                       <button key={m} onClick={() => setAdvancedMethod(m)} className={`flex-1 px-1.5 py-1 rounded text-[10px] capitalize transition-colors ${advancedMethod === m ? "bg-accent text-accent-foreground" : "bg-background hover:bg-accent/20 text-muted-foreground border border-border"}`}>{m}</button>
                     ))}
                   </div>
-                  <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={detectScenesAdvanced} disabled={!projectVideoUrl || isDetectingAdvanced}>
+                  <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={detectScenesWithPySceneDetect} disabled={!projectVideoUrl || isDetectingAdvanced}>
                     {isDetectingAdvanced ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Detecting...</> : <><Zap className="w-3.5 h-3.5" /> PySceneDetect</>}
                   </Button>
                   {!projectVideoUrl && videoObjectUrl && <p className="text-xs text-yellow-500 mt-1">Save project first to enable.</p>}
