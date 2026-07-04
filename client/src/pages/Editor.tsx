@@ -209,7 +209,21 @@ export default function Editor() {
       const layer = createLayer("text", { text: "New Text", startTime: 0, endTime: Math.max(duration || 10, 5) });
       setLayers(prev => [...prev, layer]);
       setSelectedLayerId(layer.id);
-      toast.success("Text layer added");
+      toast.success("Text title added");
+      return;
+    }
+    if (type === "shape") {
+      const layer = createLayer("shape", { name: "Lower Third Banner", shapeType: "lower-third", text: "Senior Creator / Host", color: "#10b981", startTime: 0, endTime: Math.max(duration || 10, 5) });
+      setLayers(prev => [...prev, layer]);
+      setSelectedLayerId(layer.id);
+      toast.success("Lower third shape added");
+      return;
+    }
+    if (type === "sticker") {
+      const layer = createLayer("sticker", { name: "Subscribe Callout", stickerType: "subscribe", startTime: 0, endTime: Math.max(duration || 10, 5) });
+      setLayers(prev => [...prev, layer]);
+      setSelectedLayerId(layer.id);
+      toast.success("Callout sticker added");
       return;
     }
     // video / audio / image need a file
@@ -1330,7 +1344,37 @@ export default function Editor() {
             {/* ── AI Panel ── */}
             {activePanel === "ai" && (
               <>
-                <div>
+                <div className="bg-accent/10 border border-accent/30 rounded-xl p-3 space-y-2">
+                  <label className="block text-xs font-bold text-accent uppercase tracking-wide flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5" /> AI Broadcast Slates & Callouts
+                  </label>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">Instant 1-click animated graphics injected into your composition layers.</p>
+                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-semibold gap-1 bg-background hover:bg-accent/20 border-accent/30 text-left justify-start" onClick={() => handleAddLayer("shape")}>
+                      🏷️ Lower Third
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-semibold gap-1 bg-background hover:bg-accent/20 border-accent/30 text-left justify-start" onClick={() => {
+                      const l = createLayer("sticker", { name: "Live REC Badge", stickerType: "live", startTime: Math.max(0, currentTime), endTime: Math.min(duration || 10, currentTime + 5) });
+                      setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Live REC badge added!");
+                    }}>
+                      🔴 Live Badge
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-semibold gap-1 bg-background hover:bg-accent/20 border-accent/30 text-left justify-start" onClick={() => {
+                      const l = createLayer("sticker", { name: "Breaking Banner", stickerType: "breaking", startTime: Math.max(0, currentTime), endTime: Math.min(duration || 10, currentTime + 4) });
+                      setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Breaking News added!");
+                    }}>
+                      ⚡ Breaking News
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-semibold gap-1 bg-background hover:bg-accent/20 border-accent/30 text-left justify-start" onClick={() => {
+                      const l = createLayer("sticker", { name: "Viral Fire", stickerType: "fire", startTime: Math.max(0, currentTime), endTime: Math.min(duration || 10, currentTime + 3) });
+                      setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Viral moment sticker added!");
+                    }}>
+                      🔥 Viral Moment
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="border-t border-border pt-3">
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Scene Detection</label>
                   <p className="text-xs text-muted-foreground mb-2">Analyzes brightness changes to find scene cuts automatically.</p>
                   <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={detectScenes} disabled={!videoObjectUrl || isDetectingScenes}>
@@ -1565,6 +1609,7 @@ export default function Editor() {
             clips={clips}
             scenes={scenes}
             captions={captions.map(c => ({ id: String(c.id), startTime: c.startTime, endTime: c.endTime, text: c.text }))}
+            layers={layers.map(l => ({ id: l.id, name: l.name, type: l.type, startTime: l.startTime, endTime: l.endTime }))}
             onSeek={handleSeek}
             onTrimStart={handleTrimStart}
             onTrimEnd={handleTrimEnd}

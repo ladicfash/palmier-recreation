@@ -6,7 +6,10 @@
  * first) onto the composite preview.
  */
 
-export type LayerType = "video" | "audio" | "text" | "image";
+export type LayerType = "video" | "audio" | "text" | "image" | "shape" | "sticker";
+
+export type ShapeType = "rectangle" | "circle" | "lower-third" | "badge" | "frame";
+export type StickerType = "subscribe" | "live" | "fire" | "breaking" | "like" | "glitch" | "arrow";
 
 export type BlendMode =
   | "normal"
@@ -65,8 +68,12 @@ export interface Layer {
   src?: string;        // object URL or remote URL (video/audio/image)
   text?: string;       // text layers
   fontSize?: number;   // text layers, px
-  color?: string;      // text layers
+  color?: string;      // text layers / shape color
   fontFamily?: string; // text layers
+  shapeType?: ShapeType;
+  stickerType?: StickerType;
+  animationIn?: "fade" | "pop" | "slide-left" | "slide-right" | "zoom" | "none";
+  animationOut?: "fade" | "shrink" | "slide-down" | "none";
 }
 
 export const DEFAULT_TRANSFORM: LayerTransform = {
@@ -105,6 +112,10 @@ export function createLayer(type: LayerType, partial: Partial<Layer> = {}): Laye
     fontSize: 48,
     color: "#ffffff",
     fontFamily: "sans-serif",
+    shapeType: "lower-third",
+    stickerType: "subscribe",
+    animationIn: "pop",
+    animationOut: "fade",
     ...partial,
     // Ensure nested objects are not overwritten with partials that lose keys
     ...(partial.transform ? { transform: { ...DEFAULT_TRANSFORM, ...partial.transform } } : {}),
