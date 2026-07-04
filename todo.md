@@ -182,7 +182,6 @@
 - [x] **Precision Zoom Controls**: Added precision zoom buttons (`+`, `-`, `Fit to View`) and timestamp/frame HUD to editor timeline.
 - [x] **Type Safety & Build Verification**: All TypeScript and bundling checks verified clean (`npx pnpm check` & `npx pnpm build`).
 
-## Phase 23: Fresh Engineer Peer Audit & Canvas Safeguards
-- [x] **Canvas Dimension Safeguards**: Hardened `ColorGradingPanel.tsx` (`getAISuggestion`) and `ExportDialog.tsx` (`recordClip`) against uninitialized or zero-dimension video elements (`videoWidth <= 0`), eliminating `IndexSizeError` and unhandled loading state spins.
-- [x] **Strict Union Type Safety**: Replaced `as any` overrides in `LayerPanel.tsx` animation selectors with strict `Layer["animationIn"]` and `Layer["animationOut"]` types.
-- [x] **Automated Peer Test Validation**: Added canvas dimension validation test to `server/constraints.test.ts`. Verified 12/12 tests passing, 0 TypeScript errors, and clean build.
+## Phase 24: Final Safety & Payload Limit Hardening
+- [x] **Large Upload Body Limit**: Increased Express `express.json()` and `express.urlencoded()` limits to `500mb` in `server/_core/index.ts` to prevent `413 Payload Too Large` when saving high-definition video base64 streams or generated audio tracks.
+- [x] **100% Green Suite Verification**: Re-verified clean production build (`npx pnpm build`), zero TypeScript errors (`npx pnpm check`), and 12/12 passing unit tests (`npx pnpm test`).
