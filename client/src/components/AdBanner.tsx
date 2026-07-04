@@ -12,7 +12,7 @@ interface AdBannerProps {
 
 export default function AdBanner({ type, position = "bottom" }: AdBannerProps) {
   const carbonAdsId = import.meta.env.VITE_CARBON_ADS_ID;
-  const adsterraId = import.meta.env.VITE_ADSTERRA_ID;
+  const adsterraSmartlink = import.meta.env.VITE_ADSTERRA_SMARTLINK;
 
   useEffect(() => {
     if (type === "carbon" && carbonAdsId) {
@@ -34,31 +34,26 @@ export default function AdBanner({ type, position = "bottom" }: AdBannerProps) {
       };
     }
 
-    if (type === "adsterra" && adsterraId) {
-      const script = document.createElement("script");
-      script.src = "//a.adsterra.com/s/js/160/uds.js";
-      script.async = true;
-      script.id = `_adsterra_js_${position}`;
-      script.onload = () => {
-        const win = window as any;
-        if (win.AdsterraLoader) {
-          win.AdsterraLoader.loadBanner(adsterraId);
-        }
-      };
-      
-      document.head.appendChild(script);
-
-      return () => {
-        const existingScript = document.getElementById(`_adsterra_js_${position}`);
-        if (existingScript) {
-          existingScript.remove();
-        }
-      };
+    if (type === "adsterra" && adsterraSmartlink) {
+      // Embed Adsterra smartlink as an iframe
+      const container = document.getElementById(`adsterra-${position}`);
+      if (container && !container.querySelector('iframe')) {
+        const iframe = document.createElement('iframe');
+        iframe.src = adsterraSmartlink;
+        iframe.style.width = '100%';
+        iframe.style.height = '60px';
+        iframe.style.border = 'none';
+        iframe.style.margin = '0';
+        iframe.style.padding = '0';
+        iframe.frameBorder = '0';
+        iframe.scrolling = 'no';
+        container.appendChild(iframe);
+      }
     }
-  }, [type, carbonAdsId, adsterraId, position]);
+  }, [type, carbonAdsId, adsterraSmartlink, position]);
 
   if (type === "carbon" && !carbonAdsId) return null;
-  if (type === "adsterra" && !adsterraId) return null;
+  if (type === "adsterra" && !adsterraSmartlink) return null;
 
   return (
     <div 
