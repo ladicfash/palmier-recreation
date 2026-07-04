@@ -2,6 +2,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db";
 import { transcribeAudio } from "./_core/voiceTranscription";
@@ -33,6 +34,18 @@ export const appRouter = router({
         mimeType: z.string().default("video/mp4"),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Enforce stage limits: Max 20 videos per user
+        const existingProjects = await db.getUserProjects(ctx.user.id);
+        const projectsWithVideos = existingProjects.filter(p => p.videoUrl);
+        if (projectsWithVideos.length >= 20) {
+          const currentProj = existingProjects.find(p => p.id === input.projectId);
+          if (!currentProj || !currentProj.videoUrl) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "You have reached the stage limit of 20 videos per user account.",
+            });
+          }
+        }
         const buffer = Buffer.from(input.fileData, "base64");
         const key = `videos/${ctx.user.id}/${input.projectId}/${input.fileName}`;
         const { url } = await storagePut(key, buffer, input.mimeType);
@@ -85,6 +98,13 @@ export const appRouter = router({
     create: protectedProcedure
       .input(z.object({ name: z.string(), description: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
+        const existing = await db.getUserProjects(ctx.user.id);
+        if (existing.length >= 20) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Stage limit reached: Max 20 projects/videos allowed per user account.",
+          });
+        }
         return db.createProject(ctx.user.id, input.name, input.description);
       }),
 
@@ -108,11 +128,18 @@ export const appRouter = router({
       .input(z.object({
         projectId: z.number(),
         name: z.string().optional(),
+        description: z.string().optional(),
         duration: z.number().optional(),
         videoUrl: z.string().optional(),
         videoKey: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        if (input.duration !== undefined && input.duration > 900) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Stage limit: Videos cannot exceed 15 minutes (900 seconds) in length.",
+          });
+        }
         const { projectId, ...updates } = input;
         return db.updateProject(projectId, ctx.user.id, updates);
       }),

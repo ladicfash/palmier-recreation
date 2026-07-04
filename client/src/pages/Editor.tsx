@@ -11,7 +11,7 @@ import { ColorGrade, DEFAULT_GRADE, gradeToCSS } from "@/components/ColorGrading
 import LayerPanel from "@/components/LayerPanel";
 import LayerCompositor from "@/components/LayerCompositor";
 import VoiceGenerationPanel from "@/components/VoiceGenerationPanel";
-import { Layer, LayerType, createLayer } from "@/lib/layers";
+import { Layer, LayerType, createLayer, serializeLayers, deserializeLayers } from "@/lib/layers";
 import {
   Upload, Play, Pause, Volume2, VolumeX, Download,
   Save, FolderOpen, Scissors, Type,
@@ -387,7 +387,12 @@ export default function Editor() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 500 * 1024 * 1024) { toast.error("File too large. Max 500 MB."); return; }
-    if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+    if (!projectDbId && (projectList?.length ?? 0) >= 20) {
+      toast.error("Stage Quota Reached: Max 20 projects/videos allowed per account.");
+      e.target.value = "";
+      return;
+    }
+    if (videoObjectUrl && videoObjectUrl.startsWith("blob:")) URL.revokeObjectURL(videoObjectUrl);
     // Disconnect old audio graph so we can reconnect fresh
     audioSourceRef.current = null;
     audioGainRef.current = null;
@@ -399,18 +404,25 @@ export default function Editor() {
     setCurrentTime(0); setDuration(0); setTrimStart(0); setTrimEnd(0);
     setClips([]); setScenes([]); setTextOverlays([]); setCaptions([]);
     e.target.value = "";
-  }, [videoObjectUrl]);
+  }, [videoObjectUrl, projectDbId, projectList?.length]);
 
-  useEffect(() => () => { if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl); }, []);
+  useEffect(() => () => { if (videoObjectUrl && videoObjectUrl.startsWith("blob:")) URL.revokeObjectURL(videoObjectUrl); }, []);
 
   // ─── Video Events ──────────────────────────────────────────────────────────
   const handleLoadedMetadata = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     const dur = isFinite(video.duration) ? video.duration : 0;
+    if (dur > 900) {
+      toast.error("Stage Limit: Video duration exceeds maximum allowed length of 15 minutes (900s).");
+      if (videoObjectUrl && videoObjectUrl.startsWith("blob:")) URL.revokeObjectURL(videoObjectUrl);
+      setVideoObjectUrl(null);
+      setIsVideoLoading(false);
+      return;
+    }
     setDuration(dur); setTrimEnd(dur); setIsVideoLoading(false);
     video.playbackRate = speed; video.volume = volume; video.muted = isMuted;
-  }, [speed, volume, isMuted]);
+  }, [speed, volume, isMuted, videoObjectUrl]);
 
   const handleTimeUpdate = useCallback(() => {
     if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
@@ -888,14 +900,26 @@ export default function Editor() {
   // ─── Project Save / Load ───────────────────────────────────────────────────
   const saveProject = useCallback(async () => {
     if (!projectName.trim()) { toast.error("Enter a project name"); return; }
+    if (duration > 900) { toast.error("Stage Limit: Video duration cannot exceed 15 minutes (900s)."); return; }
+    if (!projectDbId && (projectList?.length ?? 0) >= 20) {
+      toast.error("Stage Quota Reached: Max 20 projects/videos allowed per account.");
+      return;
+    }
     const toastId = toast.loading("Saving project...");
     try {
+      const stateJson = JSON.stringify({ layers: serializeLayers(layers), textOverlays, effects, colorGrade });
       let dbId = projectDbId;
       if (!dbId) {
-        const created = await createProject.mutateAsync({ name: projectName.trim(), description: `${clips.length} clips` });
-        if (created?.id) { dbId = created.id; setProjectDbId(created.id); }
+        const created = await createProject.mutateAsync({ name: projectName.trim(), description: stateJson });
+        if (created?.id) {
+          dbId = created.id;
+          setProjectDbId(created.id);
+          for (const clip of clips) {
+            saveClipMutation.mutate({ projectId: dbId, name: clip.name, startTime: Math.floor(clip.startTime * 1000), endTime: Math.floor(clip.endTime * 1000), type: clip.type });
+          }
+        }
       } else {
-        await updateProject.mutateAsync({ projectId: dbId, name: projectName.trim(), duration });
+        await updateProject.mutateAsync({ projectId: dbId, name: projectName.trim(), duration, description: stateJson });
       }
       if (dbId && videoFileRef.current) {
         const file = videoFileRef.current;
@@ -908,11 +932,12 @@ export default function Editor() {
         const uploaded = await uploadVideoMutation.mutateAsync({ projectId: dbId, fileName: file.name, fileData: base64, mimeType: file.type || "video/mp4" });
         if (uploaded?.url) setProjectVideoUrl(uploaded.url);
       }
-      toast.dismiss(toastId); toast.success("Project saved!");
-    } catch {
+      toast.dismiss(toastId); toast.success("Project saved successfully!");
+    } catch (err) {
       toast.dismiss(toastId);
+      toast.error("Failed to save project: " + (err as Error).message);
     }
-  }, [projectName, projectDbId, clips.length, duration, createProject, updateProject, uploadVideoMutation]);
+  }, [projectName, projectDbId, clips, duration, layers, textOverlays, effects, colorGrade, createProject, updateProject, uploadVideoMutation, saveClipMutation, projectList?.length]);
 
   const loadProjectFromDb = useCallback(async (projId: number, projName: string) => {
     const toastId = toast.loading(`Loading ${projName}...`);
@@ -923,23 +948,31 @@ export default function Editor() {
       if (full.project.duration) { setDuration(full.project.duration); setTrimEnd(full.project.duration); }
       if (full.clips.length > 0) {
         setClips(full.clips.map(c => ({ id: `clip-${c.id}`, name: c.name, startTime: c.startTime / 1000, endTime: c.endTime / 1000, type: (c.type ?? "video") as "video" | "audio" | "text", opacity: c.opacity ?? 1, speed: c.speed ?? 1 })));
+      } else {
+        setClips([]);
       }
       if (full.scenes.length > 0) {
         setScenes(full.scenes.map(s => ({ id: s.id, timestamp: s.timestamp, confidence: s.confidence ?? 0.5 })));
+      } else {
+        setScenes([]);
+      }
+      if (full.project.description) {
+        try {
+          const parsed = JSON.parse(full.project.description);
+          if (parsed.layers && typeof parsed.layers === "string") setLayers(deserializeLayers(parsed.layers));
+          else if (parsed.layers && Array.isArray(parsed.layers)) setLayers(parsed.layers);
+          if (parsed.textOverlays && Array.isArray(parsed.textOverlays)) setTextOverlays(parsed.textOverlays);
+          if (parsed.effects) setEffects(parsed.effects);
+          if (parsed.colorGrade) setColorGrade(parsed.colorGrade);
+        } catch { /* not json */ }
       }
       if (full.project.videoUrl) {
-        try {
-          const resp = await fetch(full.project.videoUrl);
-          if (resp.ok) {
-            const blob = await resp.blob();
-            if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
-            audioSourceRef.current = null; audioGainRef.current = null;
-            setVideoObjectUrl(URL.createObjectURL(blob));
-            setIsVideoLoading(true);
-          }
-        } catch { toast.error("Could not restore video. Please re-upload."); }
+        if (videoObjectUrl && videoObjectUrl.startsWith("blob:")) URL.revokeObjectURL(videoObjectUrl);
+        audioSourceRef.current = null; audioGainRef.current = null;
+        setVideoObjectUrl(full.project.videoUrl);
+        setProjectVideoUrl(full.project.videoUrl);
+        setIsVideoLoading(true);
       }
-      if (full.project.videoUrl) setProjectVideoUrl(full.project.videoUrl);
       setShowProjects(false); toast.dismiss(toastId); toast.success(`Loaded: ${full.project.name}`);
     } catch (err) {
       toast.dismiss(toastId); toast.error("Failed to load: " + (err as Error).message);
@@ -1622,6 +1655,9 @@ export default function Editor() {
           </div>
         )}
       </div>
+
+      {/* ── Bottom Editor Sponsored Ad Bar ── */}
+      <EditorAdBanner position="bottom" />
 
       {/* Export Dialog */}
       <ExportDialog

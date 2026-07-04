@@ -181,3 +181,9 @@
 - [x] **Layer Entrance & Exit Transitions**: Implemented dynamic layer transitions (`pop`, `fade`, `zoom`, `slide-left`, `slide-right`, `shrink`, `slide-down`) directly in `LayerCompositor.tsx`.
 - [x] **Precision Zoom Controls**: Added precision zoom buttons (`+`, `-`, `Fit to View`) and timestamp/frame HUD to editor timeline.
 - [x] **Type Safety & Build Verification**: All TypeScript and bundling checks verified clean (`npx pnpm check` & `npx pnpm build`).
+
+## Phase 19: Staging Constraints, Loading Fixes & Ad Expansions
+- [x] **Max 15-Minute Video Length**: Enforced client-side duration validation (`<= 900s`) upon video upload and server-side tRPC validation (`projects.update`).
+- [x] **Max 20 Videos/Projects Stage Quota**: Enforced account limit of 20 projects/videos in `videos.upload` and `projects.create` tRPC mutations, plus client-side pre-upload checks.
+- [x] **Reliable Project Restoration (`loadProjectFromDb`)**: Fixed video restoration failure by assigning storage URLs directly to `<video src={...} />` (eliminating browser CORS/blob issues on S3 307 redirects) and persisting multi-layer JSON state (`layers`, `textOverlays`, `effects`, `colorGrade`) in `projects.description`.
+- [x] **Bottom Editor Ad Bar**: Added dedicated `<EditorAdBanner position="bottom" />` at the bottom of the editor screen below the timeline for enhanced monetization space.
