@@ -57,7 +57,7 @@ export default function Home() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/manus-storage/pixelcraft-logo_98937669.png" alt="PixelCraft" className="w-7 h-7 rounded-md" />
+            <div className="w-7 h-7 bg-accent rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm">P</div>
             <span className="font-bold text-base tracking-tight">PixelCraft</span>
           </div>
 
@@ -352,27 +352,6 @@ export default function Home() {
           </div>
         </div>
       </footer>
-
-      {/* Ad Space */}
-      <section className="py-16 border-t border-border bg-card/30">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
-            <div className="lg:col-span-1 bg-background border border-dashed border-border rounded-lg p-8 min-h-96 flex items-center justify-center">
-              <p className="text-muted-foreground text-sm">Ad space</p>
-            </div>
-            <div className="lg:col-span-1 text-center">
-              <h3 className="text-2xl font-bold mb-4">Ready to create?</h3>
-              <p className="text-muted-foreground mb-6">Start editing for free.</p>
-              <Link href="/editor">
-                <Button size="lg" variant="default">Open Editor</Button>
-              </Link>
-            </div>
-            <div className="lg:col-span-1 bg-background border border-dashed border-border rounded-lg p-8 min-h-96 flex items-center justify-center">
-              <p className="text-muted-foreground text-sm">Ad space</p>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Carbon Ads + Adsterra Bottom Banner */}
       <AdBanner type="carbon" position="bottom" />
