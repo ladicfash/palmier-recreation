@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 
 export default function DismissibleAdPopup() {
   const [isOpen, setIsOpen] = useState(true);
-  const smartlink = import.meta.env.VITE_ADSTERRA_SMARTLINK || "";
+  const publisherId = import.meta.env.VITE_ADSTERRA_ID || "";
 
   if (!isOpen) return null;
 
@@ -22,11 +22,11 @@ export default function DismissibleAdPopup() {
           Keep PixelCraft free by viewing ads. No tracking, no spam.
         </p>
 
-        {smartlink && (
-          <iframe
-            src={smartlink}
-            style={{ width: "100%", height: "250px", border: "none", borderRadius: "8px" }}
-            title="Ad"
+        {publisherId && (
+          <div
+            data-adsterra-pub-id={publisherId}
+            data-adsterra-placement="5892184"
+            style={{ width: "100%", height: "250px" }}
           />
         )}
 
