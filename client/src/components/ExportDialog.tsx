@@ -32,7 +32,7 @@ const ASPECT_RATIOS: Record<AspectRatio, { w: number; h: number; label: string; 
 };
 
 function formatTime(t: number) {
-  if (!t || !isFinite(t)) return "0:00";
+  if (typeof t !== "number" || !isFinite(t) || isNaN(t) || t < 0) return "0:00";
   const m = Math.floor(t / 60);
   const s = Math.floor(t % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
@@ -124,6 +124,10 @@ async function recordClip(
       };
 
       const clipDuration = endTime - startTime;
+      if (clipDuration <= 0 || !isFinite(clipDuration)) {
+        reject(new Error("Invalid clip duration (end time must be greater than start time)"));
+        return;
+      }
       let elapsed = 0;
 
       const tick = setInterval(() => {

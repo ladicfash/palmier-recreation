@@ -65,22 +65,23 @@ export function TimelineEditor({
   const [dragType, setDragType] = useState<"seek" | "trim-start" | "trim-end" | null>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
 
+  const safeDuration = isFinite(duration) && duration > 0 ? duration : 10;
   const pixelsPerSecond = 50 * zoom;
-  const totalWidth = Math.max(duration * pixelsPerSecond + 120, 750);
+  const totalWidth = Math.max(safeDuration * pixelsPerSecond + 120, 750);
 
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current || isDragging) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const time = x / pixelsPerSecond;
-    onSeek(Math.max(0, Math.min(time, duration)));
+    onSeek(Math.max(0, Math.min(time, safeDuration)));
   };
 
   const handleMouseMoveHover = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const time = Math.max(0, Math.min(x / pixelsPerSecond, duration));
+    const time = Math.max(0, Math.min(x / pixelsPerSecond, safeDuration));
     setHoverTime(time);
   };
 
@@ -113,7 +114,7 @@ export function TimelineEditor({
   }, [isDragging, dragType, pixelsPerSecond, duration, trimStart, trimEnd, onSeek, onTrimStart, onTrimEnd]);
 
   const formatTime = (time: number) => {
-    if (!time || isNaN(time)) return "0:00.0";
+    if (typeof time !== "number" || isNaN(time) || !isFinite(time) || time < 0) return "0:00.0";
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
     const ms = Math.floor((time % 1) * 10);

@@ -182,8 +182,8 @@
 - [x] **Precision Zoom Controls**: Added precision zoom buttons (`+`, `-`, `Fit to View`) and timestamp/frame HUD to editor timeline.
 - [x] **Type Safety & Build Verification**: All TypeScript and bundling checks verified clean (`npx pnpm check` & `npx pnpm build`).
 
-## Phase 19: Staging Constraints, Loading Fixes & Ad Expansions
-- [x] **Max 15-Minute Video Length**: Enforced client-side duration validation (`<= 900s`) upon video upload and server-side tRPC validation (`projects.update`).
-- [x] **Max 20 Videos/Projects Stage Quota**: Enforced account limit of 20 projects/videos in `videos.upload` and `projects.create` tRPC mutations, plus client-side pre-upload checks.
-- [x] **Reliable Project Restoration (`loadProjectFromDb`)**: Fixed video restoration failure by assigning storage URLs directly to `<video src={...} />` (eliminating browser CORS/blob issues on S3 307 redirects) and persisting multi-layer JSON state (`layers`, `textOverlays`, `effects`, `colorGrade`) in `projects.description`.
-- [x] **Bottom Editor Ad Bar**: Added dedicated `<EditorAdBanner position="bottom" />` at the bottom of the editor screen below the timeline for enhanced monetization space.
+## Phase 20: Comprehensive Error Test & Fix Audit
+- [x] **Automated Constraints Test Suite**: Added `server/constraints.test.ts` with 7 automated unit tests covering stage constraints (15m length, 20 quota), layer serialization/deserialization resilience, and CSS effect calculations.
+- [x] **Export Recording Safeguards**: Hardened `ExportDialog.tsx` `recordClip` against inverted/zero duration intervals and `NaN` time calculations.
+- [x] **Timeline Layout Resilience**: Hardened `TimelineEditor.tsx` against zero, negative, `NaN`, or infinite duration calculations to prevent CSS rendering anomalies.
+- [x] **Zero Errors Verified**: Passed `npx pnpm check`, `npx pnpm test` (8/8 tests), and production bundle generation (`npx pnpm build`).
