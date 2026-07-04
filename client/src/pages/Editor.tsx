@@ -1116,43 +1116,47 @@ export default function Editor() {
   return (
     <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden">
       <EditorAdBanner />
-      {/* ── Modern Studio Header ── */}
-      <header className="flex-shrink-0 h-14 bg-[#0a0a0d]/90 backdrop-blur-xl border-b border-white/10 flex items-center px-5 gap-4 shadow-xl select-none z-40 text-white">
+      {/* ── Refined Studio Header ── */}
+      <header className="flex-shrink-0 h-13 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center px-5 gap-4 shadow select-none z-40 text-zinc-100">
         <Link href="/" className="flex items-center gap-2.5 mr-2 group">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#10b981] to-[#059669] flex items-center justify-center font-black text-black text-xs shadow-[0_0_15px_rgba(16,185,129,0.3)] group-hover:scale-105 transition-transform">P</div>
-          <span className="font-extrabold text-sm tracking-tight hidden sm:block">PixelCraft Pro</span>
+          <img
+            src="/manus-storage/pixelcraft-logo_fb926e8a.png"
+            alt="PixelCraft"
+            className="w-6 h-6 object-contain transition-transform group-hover:scale-105"
+          />
+          <span className="font-bold text-sm tracking-tight hidden sm:block text-zinc-100">PixelCraft Studio</span>
         </Link>
 
         <div className="flex-1 flex items-center gap-3">
           <input
             value={projectName}
             onChange={e => setProjectName(e.target.value)}
-            className="bg-white/5 hover:bg-white/10 text-sm font-bold text-white focus:outline-none focus:ring-1 focus:ring-[#10b981] rounded-lg px-3 py-1 max-w-[220px] transition-colors border border-white/10"
+            className="bg-zinc-900 hover:bg-zinc-800/80 text-sm font-semibold text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400 rounded px-3 py-1 max-w-[220px] transition-colors border border-zinc-800"
             placeholder="Project name"
           />
           <div className="relative">
-            <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 px-3 bg-white/5 hover:bg-white/10 border-white/15 text-white font-semibold rounded-lg" onClick={() => setShowProjects(v => !v)}>
-              <FolderOpen className="w-3.5 h-3.5 text-[#10b981]" />
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 px-3 bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200 font-medium rounded" onClick={() => setShowProjects(v => !v)}>
+              <FolderOpen className="w-3.5 h-3.5 text-zinc-400" />
               <span>Projects</span>
-              <ChevronDown className="w-3 h-3 text-white/50" />
+              <ChevronDown className="w-3 h-3 text-zinc-500" />
             </Button>
             {showProjects && (
-              <div className="absolute top-10 left-0 z-50 bg-[#121216] border border-white/15 rounded-xl shadow-2xl w-72 max-h-80 overflow-y-auto backdrop-blur-2xl p-1 text-white">
-                <div className="p-2.5 border-b border-white/10 flex items-center justify-between">
-                  <p className="text-[11px] font-extrabold text-[#10b981] uppercase tracking-wider">Cloud Projects</p>
-                  <span className="text-[10px] font-mono text-white/40">{projectList?.length ?? 0} / 20 Quota</span>
+              <div className="absolute top-10 left-0 z-50 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl w-72 max-h-80 overflow-y-auto p-1 text-zinc-100">
+                <div className="p-2.5 border-b border-zinc-800 flex items-center justify-between">
+                  <p className="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider">Cloud Projects</p>
+                  <span className="text-[10px] font-mono text-zinc-500">{projectList?.length ?? 0} / 20 Quota</span>
                 </div>
-                {projectList?.length === 0 && <p className="text-xs text-white/50 p-6 text-center">No saved projects yet</p>}
+                {projectList?.length === 0 && <p className="text-xs text-zinc-500 p-6 text-center">No saved projects yet</p>}
                 {projectList?.map(p => (
-                  <div key={p.id} className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/10 rounded-lg cursor-pointer group transition-colors" onClick={() => loadProjectFromDb(p.id, p.name)}>
-                    <div className="w-7 h-7 rounded bg-[#10b981]/15 border border-[#10b981]/30 flex items-center justify-center text-[#10b981] flex-shrink-0">
+                  <div key={p.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-zinc-800/80 rounded cursor-pointer group transition-colors" onClick={() => loadProjectFromDb(p.id, p.name)}>
+                    <div className="w-6 h-6 rounded bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 flex-shrink-0">
                       <Film className="w-3.5 h-3.5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold truncate text-white/90 group-hover:text-[#10b981] transition-colors">{p.name}</p>
-                      <p className="text-[10px] text-white/40 font-mono">{new Date(p.createdAt).toLocaleDateString()}</p>
+                      <p className="text-xs font-semibold truncate text-zinc-200 group-hover:text-zinc-100 transition-colors">{p.name}</p>
+                      <p className="text-[10px] text-zinc-500 font-mono">{new Date(p.createdAt).toLocaleDateString()}</p>
                     </div>
-                    <button onClick={e => { e.stopPropagation(); deleteProject.mutate({ projectId: p.id }); if (projectDbId === p.id) { setProjectDbId(null); setProjectName("Untitled Project"); } }} className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/20 text-white/50 hover:text-red-400 transition-all">
+                    <button onClick={e => { e.stopPropagation(); deleteProject.mutate({ projectId: p.id }); if (projectDbId === p.id) { setProjectDbId(null); setProjectName("Untitled Project"); } }} className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/20 text-zinc-500 hover:text-red-400 transition-all">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -1163,14 +1167,14 @@ export default function Editor() {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-white/5 border border-white/10 rounded-lg p-0.5">
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-white/70 hover:text-white hover:bg-white/10 rounded-md" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)"><Undo2 className="w-3.5 h-3.5" /></Button>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-white/70 hover:text-white hover:bg-white/10 rounded-md" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)"><Redo2 className="w-3.5 h-3.5" /></Button>
+          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded p-0.5">
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)"><Undo2 className="w-3.5 h-3.5" /></Button>
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)"><Redo2 className="w-3.5 h-3.5" /></Button>
           </div>
-          <Button size="sm" variant="outline" className="h-8 px-3 text-xs gap-1.5 bg-white/5 hover:bg-white/10 border-white/15 text-white font-semibold rounded-lg" onClick={() => setShowExportDialog(true)} disabled={!videoObjectUrl}>
-            <Download className="w-3.5 h-3.5 text-[#10b981]" /> Export Studio
+          <Button size="sm" variant="outline" className="h-8 px-3 text-xs gap-1.5 bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200 font-medium rounded" onClick={() => setShowExportDialog(true)} disabled={!videoObjectUrl}>
+            <Download className="w-3.5 h-3.5 text-zinc-400" /> Export
           </Button>
-          <Button size="sm" className="h-8 px-4 text-xs gap-1.5 bg-[#10b981] hover:bg-[#059669] text-black font-extrabold rounded-lg shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-transform hover:scale-102" onClick={saveProject} disabled={!videoObjectUrl}>
+          <Button size="sm" className="h-8 px-4 text-xs gap-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-950 font-semibold rounded shadow-sm" onClick={saveProject} disabled={!videoObjectUrl}>
             <Save className="w-3.5 h-3.5" /> Save Cloud
           </Button>
         </div>
@@ -1185,16 +1189,16 @@ export default function Editor() {
           <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-[#060608]">
             {!videoObjectUrl ? (
               <div className="text-center max-w-md mx-4 p-8 rounded-2xl border border-white/10 bg-[#111116] shadow-2xl space-y-5 animate-fade-in">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#10b981]/20 to-[#059669]/10 border border-[#10b981]/40 flex items-center justify-center mx-auto shadow-inner group">
-                  <Upload className="w-8 h-8 text-[#10b981]" />
+                <div className="w-16 h-16 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto shadow-inner group">
+                  <Upload className="w-6 h-6 text-zinc-400 group-hover:text-zinc-100 transition-colors" />
                 </div>
                 <div className="space-y-1.5">
-                  <h3 className="text-lg font-black text-white">Import Video Project</h3>
-                  <p className="text-xs text-white/60 leading-relaxed">
+                  <h3 className="text-base font-bold text-zinc-100">Import Video Project</h3>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
                     Upload any MP4, WebM, or MOV file up to 15 minutes (max 500 MB). Edits happen 100% locally in browser memory.
                   </p>
                 </div>
-                <label className="cursor-pointer inline-flex items-center justify-center gap-2 bg-[#10b981] hover:bg-[#059669] text-black font-extrabold px-6 py-3 rounded-xl shadow-lg transition-transform hover:scale-105 text-sm w-full">
+                <label className="cursor-pointer inline-flex items-center justify-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-950 font-semibold px-6 py-3 rounded-lg shadow transition-colors text-sm w-full">
                   <Film className="w-4 h-4" /> Select Video File
                   <input type="file" accept="video/mp4,video/webm,video/quicktime,video/*" className="hidden" onChange={handleVideoUpload} />
                 </label>
@@ -1251,40 +1255,40 @@ export default function Editor() {
 
           {/* Floating Studio Playback Bar */}
           {videoObjectUrl && (
-            <div className="flex-shrink-0 bg-[#141418]/95 border border-white/10 mx-4 mb-3 px-5 py-2.5 rounded-xl space-y-2 shadow-2xl text-white">
+            <div className="flex-shrink-0 bg-zinc-900/95 border border-zinc-800 mx-4 mb-3 px-5 py-2.5 rounded-xl space-y-2 shadow-xl text-zinc-100">
               {/* Progress bar */}
-              <div className="flex items-center gap-3 text-xs text-white/70 font-mono">
-                <span className="w-12 text-right font-bold text-[#10b981]">{formatTime(currentTime)}</span>
-                <div className="flex-1 relative h-2.5 bg-black/60 rounded-full cursor-pointer group border border-white/10" onClick={e => {
+              <div className="flex items-center gap-3 text-xs text-zinc-400 font-mono">
+                <span className="w-12 text-right font-medium text-zinc-200">{formatTime(currentTime)}</span>
+                <div className="flex-1 relative h-2 bg-zinc-950 rounded-full cursor-pointer group border border-zinc-800" onClick={e => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   handleSeek(((e.clientX - rect.left) / rect.width) * duration);
                 }}>
                   {/* Trim range */}
-                  <div className="absolute h-full bg-[#10b981]/25 rounded-full" style={{ left: `${(trimStart / duration) * 100}%`, width: `${((trimEnd - trimStart) / duration) * 100}%` }} />
+                  <div className="absolute h-full bg-zinc-700/50 rounded-full" style={{ left: `${(trimStart / duration) * 100}%`, width: `${((trimEnd - trimStart) / duration) * 100}%` }} />
                   {/* Playhead */}
-                  <div className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-[#10b981] rounded-full -translate-x-1/2 shadow-lg border-2 border-white scale-110" style={{ left: `${(currentTime / duration) * 100}%` }} />
-                  <div className="absolute h-full bg-[#10b981]/60 rounded-full" style={{ width: `${(currentTime / duration) * 100}%` }} />
+                  <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-zinc-100 rounded-full -translate-x-1/2 shadow border border-zinc-900" style={{ left: `${(currentTime / duration) * 100}%` }} />
+                  <div className="absolute h-full bg-zinc-300 rounded-full" style={{ width: `${(currentTime / duration) * 100}%` }} />
                 </div>
-                <span className="w-12 font-semibold text-white/50">{formatTime(duration)}</span>
+                <span className="w-12 font-medium text-zinc-500">{formatTime(duration)}</span>
               </div>
 
               {/* Controls row */}
               <div className="flex items-center justify-between pt-0.5">
                 <div className="flex items-center gap-3">
-                  <button onClick={handlePlayPause} className="w-9 h-9 rounded-xl bg-[#10b981] flex items-center justify-center text-black font-extrabold hover:bg-[#059669] transition-transform hover:scale-105 shadow-md flex-shrink-0">
-                    {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+                  <button onClick={handlePlayPause} className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center text-zinc-950 font-bold hover:bg-zinc-200 transition-colors shadow-sm flex-shrink-0">
+                    {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
                   </button>
-                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 px-2.5 py-1 rounded-lg">
-                    <button onClick={() => { setIsMuted(v => { const next = !v; if (videoRef.current) videoRef.current.muted = next; return next; })} } className="text-white/70 hover:text-white transition-colors">
-                      {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-[#10b981]" />}
+                  <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-2.5 py-1 rounded-md">
+                    <button onClick={() => { setIsMuted(v => { const next = !v; if (videoRef.current) videoRef.current.muted = next; return next; })} } className="text-zinc-400 hover:text-zinc-100 transition-colors">
+                      {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-zinc-300" />}
                     </button>
-                    <input type="range" min={0} max={1} step={0.05} value={isMuted ? 0 : volume} onChange={e => handleVolumeChange(Number(e.target.value))} className="w-20 h-1 accent-[#10b981]" />
+                    <input type="range" min={0} max={1} step={0.05} value={isMuted ? 0 : volume} onChange={e => handleVolumeChange(Number(e.target.value))} className="w-20 h-1 accent-zinc-200" />
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 px-2.5 py-1 rounded-lg text-xs font-mono">
-                  <span className="text-white/50 mr-1 text-[11px] font-sans font-semibold">Speed:</span>
+                <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-800 px-2 py-1 rounded-md text-xs font-mono">
+                  <span className="text-zinc-500 mr-1 text-[11px] font-sans font-medium">Speed:</span>
                   {[0.5, 1, 1.5, 2].map(s => (
-                    <button key={s} onClick={() => handleSpeedChange(s)} className={`px-2 py-0.5 rounded text-xs font-bold transition-all ${speed === s ? "bg-[#10b981] text-black shadow" : "text-white/70 hover:bg-white/10"}`}>{s}x</button>
+                    <button key={s} onClick={() => handleSpeedChange(s)} className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${speed === s ? "bg-zinc-100 text-zinc-950 shadow-sm" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"}`}>{s}x</button>
                   ))}
                 </div>
               </div>
@@ -1293,18 +1297,18 @@ export default function Editor() {
         </div>
 
         {/* ── Right Studio Panel ── */}
-        <div className="w-72 flex-shrink-0 flex flex-col border-l border-white/10 bg-[#0e0e12] overflow-hidden shadow-2xl text-white">
+        <div className="w-72 flex-shrink-0 flex flex-col border-l border-zinc-800/80 bg-zinc-900/90 overflow-hidden shadow-xl text-zinc-100">
           {/* Panel Tabs */}
-          <div className="flex-shrink-0 border-b border-white/10 bg-[#121216]">
-            <div className="grid grid-cols-4 gap-1 p-1.5">
+          <div className="flex-shrink-0 border-b border-zinc-800/80 bg-zinc-950">
+            <div className="grid grid-cols-4 gap-1 p-1">
               {panelTabs.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActivePanel(tab.id)}
-                  className={`flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg text-xs font-semibold transition-all ${
+                  className={`flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-md text-xs font-medium transition-all ${
                     activePanel === tab.id
-                      ? "bg-[#10b981] text-black font-extrabold shadow-md scale-[1.02]"
-                      : "text-white/60 hover:text-white hover:bg-white/5"
+                      ? "bg-zinc-100 text-zinc-950 font-bold shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900"
                   }`}
                 >
                   {tab.icon}
@@ -1405,32 +1409,32 @@ export default function Editor() {
             {/* ── AI Panel ── */}
             {activePanel === "ai" && (
               <>
-                <div className="bg-accent/10 border border-accent/30 rounded-xl p-3 space-y-2">
-                  <label className="block text-xs font-bold text-accent uppercase tracking-wide flex items-center gap-1.5">
-                    <Zap className="w-3.5 h-3.5" /> AI Broadcast Slates & Callouts
+                <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3.5 space-y-2">
+                  <label className="block text-xs font-semibold text-zinc-100 uppercase tracking-wide flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-zinc-400" /> Broadcast Slates & Elements
                   </label>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">Instant 1-click animated graphics injected into your composition layers.</p>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">Instant 1-click graphics injected into your composition layer stack.</p>
                   <div className="grid grid-cols-2 gap-1.5 pt-1">
-                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-semibold gap-1 bg-background hover:bg-accent/20 border-accent/30 text-left justify-start" onClick={() => handleAddLayer("shape")}>
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-medium gap-1 bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200 justify-start" onClick={() => handleAddLayer("shape")}>
                       🏷️ Lower Third
                     </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-semibold gap-1 bg-background hover:bg-accent/20 border-accent/30 text-left justify-start" onClick={() => {
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-medium gap-1 bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200 justify-start" onClick={() => {
                       const l = createLayer("sticker", { name: "Live REC Badge", stickerType: "live", startTime: Math.max(0, currentTime), endTime: Math.min(duration || 10, currentTime + 5) });
-                      setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Live REC badge added!");
+                      setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Live REC badge added");
                     }}>
-                      🔴 Live Badge
+                      🔴 Live REC
                     </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-semibold gap-1 bg-background hover:bg-accent/20 border-accent/30 text-left justify-start" onClick={() => {
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-medium gap-1 bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200 justify-start" onClick={() => {
                       const l = createLayer("sticker", { name: "Breaking Banner", stickerType: "breaking", startTime: Math.max(0, currentTime), endTime: Math.min(duration || 10, currentTime + 4) });
-                      setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Breaking News added!");
+                      setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Breaking News added");
                     }}>
-                      ⚡ Breaking News
+                      ⚡ News Banner
                     </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-semibold gap-1 bg-background hover:bg-accent/20 border-accent/30 text-left justify-start" onClick={() => {
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] font-medium gap-1 bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200 justify-start" onClick={() => {
                       const l = createLayer("sticker", { name: "Viral Fire", stickerType: "fire", startTime: Math.max(0, currentTime), endTime: Math.min(duration || 10, currentTime + 3) });
-                      setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Viral moment sticker added!");
+                      setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Sticker added");
                     }}>
-                      🔥 Viral Moment
+                      🔥 Callout
                     </Button>
                   </div>
                 </div>
