@@ -307,6 +307,20 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── Ad Space ── */}
+      <section className="py-16 px-6 border-t border-border bg-card/30">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="h-48 bg-muted rounded-lg border border-border flex items-center justify-center text-muted-foreground text-sm">
+              Ad Space
+            </div>
+            <div className="h-48 bg-muted rounded-lg border border-border flex items-center justify-center text-muted-foreground text-sm">
+              Ad Space
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Footer ── */}
       <footer className="border-t border-border py-12 px-6">
         <div className="max-w-6xl mx-auto">
