@@ -39,13 +39,13 @@ const SHAPE_OPTIONS: { id: ShapeType; label: string }[] = [
 ];
 
 const STICKER_OPTIONS: { id: StickerType; label: string }[] = [
-  { id: "subscribe", label: "▶ Subscribe Now" },
-  { id: "live", label: "🔴 LIVE REC" },
-  { id: "breaking", label: "⚡ BREAKING NEWS" },
-  { id: "fire", label: "🔥 Viral Moment" },
-  { id: "like", label: "👍 Like & Share" },
-  { id: "glitch", label: "💻 System Override" },
-  { id: "arrow", label: "➔ Animated Arrow" },
+  { id: "subscribe", label: "Subscribe Now" },
+  { id: "live", label: "LIVE REC Badge" },
+  { id: "breaking", label: "BREAKING NEWS" },
+  { id: "fire", label: "Viral Highlight" },
+  { id: "like", label: "Like & Share" },
+  { id: "glitch", label: "System Override" },
+  { id: "arrow", label: "Animated Arrow" },
 ];
 
 function SliderRow({ label, value, min, max, step = 1, unit = "", onChange }: {

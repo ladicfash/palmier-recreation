@@ -1203,8 +1203,8 @@ export default function Editor() {
                   <input type="file" accept="video/mp4,video/webm,video/quicktime,video/*" className="hidden" onChange={handleVideoUpload} />
                 </label>
                 <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-white/40 font-mono">
-                  <span>🔒 Client-Side Render</span>
-                  <span>⚡ 0ms Latency</span>
+                  <span>Client-Side Render</span>
+                  <span>0ms Latency</span>
                 </div>
               </div>
             ) : (
@@ -1416,25 +1416,25 @@ export default function Editor() {
                   <p className="text-[11px] text-zinc-400 leading-relaxed">Instant 1-click graphics injected into your composition layer stack.</p>
                   <div className="grid grid-cols-2 gap-1.5 pt-1">
                     <Button size="sm" variant="outline" className="h-7 text-[11px] font-medium gap-1 bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200 justify-start" onClick={() => handleAddLayer("shape")}>
-                      🏷️ Lower Third
+                      Lower Third
                     </Button>
                     <Button size="sm" variant="outline" className="h-7 text-[11px] font-medium gap-1 bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200 justify-start" onClick={() => {
                       const l = createLayer("sticker", { name: "Live REC Badge", stickerType: "live", startTime: Math.max(0, currentTime), endTime: Math.min(duration || 10, currentTime + 5) });
                       setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Live REC badge added");
                     }}>
-                      🔴 Live REC
+                      Live REC
                     </Button>
                     <Button size="sm" variant="outline" className="h-7 text-[11px] font-medium gap-1 bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200 justify-start" onClick={() => {
                       const l = createLayer("sticker", { name: "Breaking Banner", stickerType: "breaking", startTime: Math.max(0, currentTime), endTime: Math.min(duration || 10, currentTime + 4) });
                       setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Breaking News added");
                     }}>
-                      ⚡ News Banner
+                      News Banner
                     </Button>
                     <Button size="sm" variant="outline" className="h-7 text-[11px] font-medium gap-1 bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-200 justify-start" onClick={() => {
                       const l = createLayer("sticker", { name: "Viral Fire", stickerType: "fire", startTime: Math.max(0, currentTime), endTime: Math.min(duration || 10, currentTime + 3) });
                       setLayers(p => [...p, l]); setSelectedLayerId(l.id); setActivePanel("layers"); toast.success("Sticker added");
                     }}>
-                      🔥 Callout
+                      Callout
                     </Button>
                   </div>
                 </div>

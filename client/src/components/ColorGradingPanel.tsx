@@ -347,7 +347,7 @@ export function ColorGradingPanel({ grade, onChange, videoRef, projectDbId }: Co
           <Button size="sm" variant="ghost" className="h-6 px-2 text-xs gap-1"
             onClick={getAISuggestion} disabled={isGettingAISuggestion}>
             {isGettingAISuggestion ? (
-              <span className="animate-spin">⟳</span>
+              <Sparkles className="w-3 h-3 animate-spin" />
             ) : (
               <Sparkles className="w-3 h-3" />
             )}
