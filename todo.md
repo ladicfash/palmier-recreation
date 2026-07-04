@@ -182,8 +182,8 @@
 - [x] **Precision Zoom Controls**: Added precision zoom buttons (`+`, `-`, `Fit to View`) and timestamp/frame HUD to editor timeline.
 - [x] **Type Safety & Build Verification**: All TypeScript and bundling checks verified clean (`npx pnpm check` & `npx pnpm build`).
 
-## Phase 20: Comprehensive Error Test & Fix Audit
-- [x] **Automated Constraints Test Suite**: Added `server/constraints.test.ts` with 7 automated unit tests covering stage constraints (15m length, 20 quota), layer serialization/deserialization resilience, and CSS effect calculations.
-- [x] **Export Recording Safeguards**: Hardened `ExportDialog.tsx` `recordClip` against inverted/zero duration intervals and `NaN` time calculations.
-- [x] **Timeline Layout Resilience**: Hardened `TimelineEditor.tsx` against zero, negative, `NaN`, or infinite duration calculations to prevent CSS rendering anomalies.
-- [x] **Zero Errors Verified**: Passed `npx pnpm check`, `npx pnpm test` (8/8 tests), and production bundle generation (`npx pnpm build`).
+## Phase 21: Ultra-Modern 2026 SaaS Studio UI Modernization
+- [x] **Glassmorphic Studio Header**: Upgraded `Editor.tsx` top navigation bar with `#0a0a0d/90` dark glassmorphism, accent gradient logo mark, and interactive quota pills.
+- [x] **Sleek Inspector Dock**: Upgraded editor sidebar navigation tabs with `#10b981` active indicator pills and scaled focus cards.
+- [x] **Floating Studio Playback Controls**: Replaced flat video toolbar with a floating glassmorphic playback dock featuring custom progress scrubbing and speed multiplier pills.
+- [x] **Import Video Card**: Created polished onboarding card inside canvas workspace when no project is loaded.
