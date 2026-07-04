@@ -56,6 +56,9 @@ async function recordClip(
       let cleanupCanvas: (() => void) | null = null;
 
       if (aspectRatio) {
+        if (videoEl.videoWidth <= 0 || videoEl.videoHeight <= 0) {
+          throw new Error("Video dimensions not ready. Please play or seek video before exporting.");
+        }
         // ── Canvas-based center-crop export ──────────────────────────────────
         const { w, h } = ASPECT_RATIOS[aspectRatio];
         const canvas = document.createElement("canvas");

@@ -273,7 +273,7 @@ export default function LayerPanel({
               <span className="text-[10px] text-muted-foreground block mb-1 flex items-center gap-1"><PlayCircle className="w-3 h-3 text-green-400" /> Enter Anim</span>
               <select
                 value={selected.animationIn ?? "pop"}
-                onChange={e => onUpdateLayer(selected.id, { animationIn: e.target.value as any })}
+                onChange={e => onUpdateLayer(selected.id, { animationIn: e.target.value as Layer["animationIn"] })}
                 className="w-full h-7 px-1.5 rounded bg-background border border-border text-[11px]"
               >
                 <option value="pop">Pop Scale</option>
@@ -288,7 +288,7 @@ export default function LayerPanel({
               <span className="text-[10px] text-muted-foreground block mb-1 flex items-center gap-1"><StopCircle className="w-3 h-3 text-red-400" /> Exit Anim</span>
               <select
                 value={selected.animationOut ?? "fade"}
-                onChange={e => onUpdateLayer(selected.id, { animationOut: e.target.value as any })}
+                onChange={e => onUpdateLayer(selected.id, { animationOut: e.target.value as Layer["animationOut"] })}
                 className="w-full h-7 px-1.5 rounded bg-background border border-border text-[11px]"
               >
                 <option value="fade">Fade Out</option>

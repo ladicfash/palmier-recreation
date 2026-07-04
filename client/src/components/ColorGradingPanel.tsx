@@ -297,23 +297,27 @@ export function ColorGradingPanel({ grade, onChange, videoRef, projectDbId }: Co
 
   const getAISuggestion = async () => {
     if (!videoRef.current) { toast.error("No video loaded"); return; }
+    if (videoRef.current.videoWidth <= 0 || videoRef.current.videoHeight <= 0) {
+      toast.error("Video dimensions not ready yet"); return;
+    }
     setIsGettingAISuggestion(true);
-    // Capture a frame for analysis
-    const canvas = document.createElement("canvas");
-    canvas.width = 320; canvas.height = 180;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) { setIsGettingAISuggestion(false); return; }
-    ctx.drawImage(videoRef.current, 0, 0, 320, 180);
-    const frameData = canvas.toDataURL("image/jpeg", 0.7);
-    callAISuggest(frameData, grade)
-      .then((data) => {
-        if (data?.grade) {
-          onChange({ ...grade, ...data.grade });
-          toast.success(`AI suggestion applied: ${data.description ?? "Custom grade"}`);
-        }
-      })
-      .catch((err: Error) => toast.error("AI suggestion failed: " + err.message))
-      .finally(() => setIsGettingAISuggestion(false));
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 320; canvas.height = 180;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas context unavailable");
+      ctx.drawImage(videoRef.current, 0, 0, 320, 180);
+      const frameData = canvas.toDataURL("image/jpeg", 0.7);
+      const data = await callAISuggest(frameData, grade);
+      if (data?.grade) {
+        onChange({ ...grade, ...data.grade });
+        toast.success(`AI suggestion applied: ${data.description ?? "Custom grade"}`);
+      }
+    } catch (err: any) {
+      toast.error("AI suggestion failed: " + (err.message || "Unknown error"));
+    } finally {
+      setIsGettingAISuggestion(false);
+    }
   };
 
   const curveData = activeCurve === "master" ? grade.curveMaster

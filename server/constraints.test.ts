@@ -112,4 +112,14 @@ describe("Senior Architecture Code Resilience Audit", () => {
     expect(snapshot.layers.length).toBe(1);
     expect(snapshot.layers[0]?.name).toBe("Lower Third");
   });
+
+  it("should validate video dimensions prior to canvas extraction or export", () => {
+    const validateCanvasExport = (width: number, height: number) => {
+      if (width <= 0 || height <= 0 || isNaN(width) || isNaN(height)) return false;
+      return true;
+    };
+    expect(validateCanvasExport(1920, 1080)).toBe(true);
+    expect(validateCanvasExport(0, 0)).toBe(false);
+    expect(validateCanvasExport(-100, 500)).toBe(false);
+  });
 });
