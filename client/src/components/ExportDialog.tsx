@@ -48,12 +48,14 @@ async function recordClip(
   startTime: number,
   endTime: number,
   aspectRatio: AspectRatio | null,
-  onProgress: (pct: number) => void
+  onProgress: (pct: number) => void,
+  options?: { bitrate?: number; fps?: number; watermarkText?: string }
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
     try {
       let stream: MediaStream;
       let cleanupCanvas: (() => void) | null = null;
+      const targetFps = options?.fps || 30;
 
       if (aspectRatio) {
         if (videoEl.videoWidth <= 0 || videoEl.videoHeight <= 0) {
@@ -85,6 +87,15 @@ async function recordClip(
         let rafId: number;
         const drawFrame = () => {
           ctx.drawImage(videoEl, sx, sy, sw, sh, 0, 0, w, h);
+          if (options?.watermarkText) {
+            ctx.save();
+            ctx.font = "bold 24px monospace";
+            ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+            ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+            ctx.shadowBlur = 8;
+            ctx.fillText(options.watermarkText, 25, h - 35);
+            ctx.restore();
+          }
           rafId = requestAnimationFrame(drawFrame);
         };
         rafId = requestAnimationFrame(drawFrame);
@@ -93,11 +104,11 @@ async function recordClip(
           cancelAnimationFrame(rafId);
         };
 
-        const canvasStream = (canvas as any).captureStream?.(30);
+        const canvasStream = (canvas as any).captureStream?.(targetFps);
         if (!canvasStream) throw new Error("canvas.captureStream not supported in this browser. Try Chrome or Edge.");
 
         // Add audio track from the video if available
-        const videoStream = (videoEl as any).captureStream?.(30) ?? (videoEl as any).mozCaptureStream?.(30);
+        const videoStream = (videoEl as any).captureStream?.(targetFps) ?? (videoEl as any).mozCaptureStream?.(targetFps);
         if (videoStream) {
           const audioTracks = videoStream.getAudioTracks();
           audioTracks.forEach((track: MediaStreamTrack) => canvasStream.addTrack(track));
@@ -106,14 +117,18 @@ async function recordClip(
         stream = canvasStream;
       } else {
         // ── Direct video capture (original aspect ratio) ──────────────────────
-        stream = (videoEl as any).captureStream?.(30) ?? (videoEl as any).mozCaptureStream?.(30);
+        stream = (videoEl as any).captureStream?.(targetFps) ?? (videoEl as any).mozCaptureStream?.(targetFps);
         if (!stream) throw new Error("captureStream not supported in this browser. Try Chrome or Edge.");
       }
 
       const mimeType = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"]
         .find(t => MediaRecorder.isTypeSupported(t)) ?? "video/mp4";
 
-      const recorder = new MediaRecorder(stream, { mimeType });
+      const recorderOptions: MediaRecorderOptions = { mimeType };
+      if (options?.bitrate) {
+        recorderOptions.videoBitsPerSecond = options.bitrate;
+      }
+      const recorder = new MediaRecorder(stream, recorderOptions);
       const chunks: Blob[] = [];
 
       recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
@@ -167,6 +182,9 @@ export function ExportDialog({
   const [format, setFormat] = useState<ExportFormat>("original");
   const [selectedClipId, setSelectedClipId] = useState<string>(clips[0]?.id ?? "");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("9:16");
+  const [bitrate, setBitrate] = useState<number>(8000000); // 8 Mbps
+  const [fps, setFps] = useState<number>(30);
+  const [watermarkText, setWatermarkText] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
@@ -209,7 +227,8 @@ export function ExportDialog({
         selectedClip.startTime,
         selectedClip.endTime,
         ratio,
-        setProgress
+        setProgress,
+        { bitrate, fps, watermarkText: watermarkText.trim() || undefined }
       );
 
       const url = URL.createObjectURL(blob);
@@ -343,6 +362,53 @@ export function ExportDialog({
                   <span className="text-muted-foreground">Platform</span>
                   <span className="font-mono">{selectedRatioInfo.platform}</span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Studio Quality Settings */}
+          {(format === "clip" || format === "shortform") && (
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-lg p-3 space-y-3">
+              <label className="text-xs font-bold text-zinc-100 uppercase tracking-wide block">Studio Quality Settings</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] text-zinc-400 block mb-1">Target Bitrate</span>
+                  <select
+                    value={bitrate}
+                    onChange={e => setBitrate(Number(e.target.value))}
+                    disabled={isExporting}
+                    className="w-full h-7 px-2 rounded bg-zinc-950 border border-zinc-700 text-xs text-zinc-200"
+                  >
+                    <option value={2500000}>2.5 Mbps (Web Standard)</option>
+                    <option value={8000000}>8.0 Mbps (HD 1080p)</option>
+                    <option value={20000000}>20 Mbps (4K Master)</option>
+                    <option value={50000000}>50 Mbps (ProRes Studio)</option>
+                  </select>
+                </div>
+                <div>
+                  <span className="text-[10px] text-zinc-400 block mb-1">Frame Rate (FPS)</span>
+                  <select
+                    value={fps}
+                    onChange={e => setFps(Number(e.target.value))}
+                    disabled={isExporting}
+                    className="w-full h-7 px-2 rounded bg-zinc-950 border border-zinc-700 text-xs text-zinc-200"
+                  >
+                    <option value={24}>24 FPS (Cinematic)</option>
+                    <option value={30}>30 FPS (Standard)</option>
+                    <option value={60}>60 FPS (Smooth 60p)</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-400 block mb-1">Burn-in Watermark Text (Optional)</span>
+                <input
+                  type="text"
+                  value={watermarkText}
+                  onChange={e => setWatermarkText(e.target.value)}
+                  placeholder="e.g. STUDIO AI PRO / @handle"
+                  disabled={isExporting}
+                  className="w-full h-7 px-2 rounded bg-zinc-950 border border-zinc-700 text-xs text-zinc-200 focus:outline-none focus:border-yellow-500"
+                />
               </div>
             </div>
           )}

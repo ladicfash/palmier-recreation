@@ -52,19 +52,36 @@ export default function EditorAdBanner({ position = "top" }: EditorAdBannerProps
     );
   }
 
+  if (position === "bottom") {
+    return (
+      <div className="w-full bg-zinc-950 border-t border-zinc-800/80 px-6 py-3 flex flex-col md:flex-row items-center justify-between gap-4 select-none min-h-[80px]">
+        <div className="flex items-center gap-3">
+          <span className="bg-zinc-900 border border-zinc-800 text-yellow-400 font-mono font-bold text-[9px] px-2 py-0.5 rounded uppercase tracking-wider">
+            Sponsored
+          </span>
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-zinc-200">Studio Partner Leaderboard (728x90)</span>
+            <span className="text-[10px] text-zinc-500">Premium placement below timeline workspace</span>
+          </div>
+        </div>
+        <div className="flex-1 max-w-3xl h-14 bg-zinc-900/80 rounded border border-dashed border-zinc-800 flex items-center justify-center gap-6 px-4">
+          <span className="text-[11px] font-mono text-zinc-400">[ PROMOTED AI PRODUCTION SUITE / ADSTERRA UNIT ]</span>
+          <span className="text-[10px] text-yellow-500 underline cursor-pointer font-mono font-semibold hover:text-yellow-400">Advertise Here</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`w-full bg-zinc-950 border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between px-6 py-3.5 select-none gap-2 ${position === "top" ? "border-b min-h-[56px]" : "border-t min-h-[88px]"}`}>
+    <div className="w-full bg-zinc-950 border-b border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between px-6 py-3 select-none gap-2 min-h-[56px]">
       <div className="flex items-center gap-3">
         <span className="bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono font-medium text-[10px] px-2.5 py-1 rounded uppercase tracking-wider">
           Sponsored Placement
         </span>
         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
           <span className="text-xs font-semibold text-zinc-300">
-            {position === "top" ? "Top Studio Leaderboard Strip (728x90)" : "Bottom Workspace Sponsor Strip (Dual 728x90 / 468x60 Leaderboards)"}
+            Top Studio Leaderboard Strip (728x90)
           </span>
-          {position === "bottom" && (
-            <span className="text-[10px] text-zinc-500 hidden md:inline-block">High-engagement placement below editing timeline</span>
-          )}
         </div>
       </div>
       <div className="flex items-center gap-4 text-[11px] text-zinc-500 font-mono">

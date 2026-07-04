@@ -17,8 +17,11 @@ import {
   Save, FolderOpen, Scissors, Type,
   Zap, Film, X, Loader2, SplitSquareHorizontal,
   Undo2, Redo2, MessageSquare, Palette, Music, ChevronDown, Send,
-  Layers as LayersIcon
+  Layers as LayersIcon, Sparkles, Flame, TrendingUp
 } from "lucide-react";
+import { STUDIO_TEMPLATES, StudioTemplate } from "@/lib/templates";
+import { analyzeViralPotential, ViralAnalysisResult } from "@/lib/viralAnalyzer";
+import { extractAudioFromVideoBlob, calculateDuckedVolume } from "@/lib/audioStudio";
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -197,7 +200,7 @@ export default function Editor() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Panel
-  const [activePanel, setActivePanel] = useState<"edit" | "ai" | "text" | "effects" | "color" | "chat" | "layers" | "voice">("edit");
+  const [activePanel, setActivePanel] = useState<"edit" | "ai" | "text" | "effects" | "color" | "chat" | "layers" | "voice" | "templates">("edit");
 
   // ─── Multi-Layer Editing ──────────────────────────────────────────────
   const [layers, setLayers] = useState<Layer[]>([]);
@@ -280,6 +283,7 @@ export default function Editor() {
     setLayers(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)));
   }, []);
   const [audioEffectsTab, setAudioEffectsTab] = useState<"audio" | "effects">("audio");
+  const [duckingEnabled, setDuckingEnabled] = useState(false);
 
   // Undo/Redo
   const historyRef = useRef<EditorSnapshot[]>([]);
@@ -617,6 +621,61 @@ export default function Editor() {
       audioTracks.forEach(track => track.audioEl?.pause());
     }
   }, [isPlaying, audioTracks]);
+
+  const handleExtractAudio = useCallback(async () => {
+    if (!videoObjectUrl) {
+      toast.error("Please upload a video first");
+      return;
+    }
+    try {
+      toast.loading("Extracting audio from video...", { id: "extract-audio" });
+      const res = await fetch(videoObjectUrl);
+      const blob = await res.blob();
+      const wavUrl = await extractAudioFromVideoBlob(blob);
+      const audioEl = new Audio(wavUrl);
+      audioEl.preload = "metadata";
+      await new Promise<void>((resolve) => {
+        audioEl.onloadedmetadata = () => resolve();
+        audioEl.onerror = () => resolve();
+        setTimeout(resolve, 3000);
+      });
+      const ctx = initAudioContext();
+      const source = ctx.createMediaElementSource(audioEl);
+      const gain = ctx.createGain();
+      gain.gain.value = 1;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      const trackId = `audio-${Date.now()}`;
+      audioTrackGainsRef.current.set(trackId, gain);
+      const newTrack: AudioTrack = {
+        id: trackId, name: "Extracted Video Audio",
+        duration: isFinite(audioEl.duration) ? audioEl.duration * 1000 : (duration || 10) * 1000,
+        volume: 100, startTime: 0, objectUrl: wavUrl, audioEl,
+      };
+      setAudioTracks(prev => [...prev, newTrack]);
+      toast.success("Audio extracted as independent track!", { id: "extract-audio" });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to extract audio track", { id: "extract-audio" });
+    }
+  }, [videoObjectUrl, duration, initAudioContext]);
+
+  // Smart Audio Ducking effect
+  useEffect(() => {
+    if (!duckingEnabled) return;
+    const intervals = [
+      { startTime: 0, endTime: duration || 100, muted: isMuted, type: "video" as const },
+      ...layers.filter(l => l.type === "audio").map(l => ({
+        startTime: l.startTime, endTime: l.endTime, muted: l.muted, type: "voice" as const,
+      })),
+    ];
+    audioTracks.forEach(track => {
+      const targetVol = calculateDuckedVolume(track.volume / 100, currentTime, intervals, duckingEnabled);
+      if (track.audioEl) track.audioEl.volume = targetVol;
+      const gain = audioTrackGainsRef.current.get(track.id);
+      if (gain) gain.gain.value = targetVol;
+    });
+  }, [currentTime, duckingEnabled, duration, isMuted, layers, audioTracks]);
 
   // ─── Advanced Scene Detection (PySceneDetect backend) ─────────────────────
   const [isDetectingAdvanced, setIsDetectingAdvanced] = useState(false);
@@ -1105,6 +1164,7 @@ export default function Editor() {
   const panelTabs = [
     { id: "edit", icon: <Scissors className="w-3.5 h-3.5" />, label: "Edit" },
     { id: "ai", icon: <Zap className="w-3.5 h-3.5" />, label: "AI" },
+    { id: "templates", icon: <Sparkles className="w-3.5 h-3.5 text-yellow-400" />, label: "Templates" },
     { id: "text", icon: <Type className="w-3.5 h-3.5" />, label: "Text" },
     { id: "effects", icon: <Music className="w-3.5 h-3.5" />, label: "Audio" },
     { id: "color", icon: <Palette className="w-3.5 h-3.5" />, label: "Color" },
@@ -1300,7 +1360,7 @@ export default function Editor() {
         <div className="w-72 flex-shrink-0 flex flex-col border-l border-zinc-800/80 bg-zinc-900/90 overflow-hidden shadow-xl text-zinc-100">
           {/* Panel Tabs */}
           <div className="flex-shrink-0 border-b border-zinc-800/80 bg-zinc-950">
-            <div className="grid grid-cols-4 gap-1 p-1">
+            <div className="grid grid-cols-3 gap-1 p-1">
               {panelTabs.map(tab => (
                 <button
                   key={tab.id}
@@ -1409,6 +1469,55 @@ export default function Editor() {
             {/* ── AI Panel ── */}
             {activePanel === "ai" && (
               <>
+                {/* Viral Hook & Engagement Analyzer */}
+                {(() => {
+                  const viral = analyzeViralPotential({
+                    videoDuration: duration || 10,
+                    clipCount: clips.length || 1,
+                    sceneCount: scenes.length || 1,
+                    hasCaptions: captions.length > 0,
+                    hasTextOverlays: textOverlays.length > 0,
+                    hasAudioTracks: audioTracks.length > 0 || layers.some(l => l.type === "audio"),
+                    hasLayers: layers.length > 0,
+                    activeEffectsCount: Object.values(effects).filter((v, i) => v !== Object.values(DEFAULT_EFFECTS)[i]).length,
+                  });
+                  return (
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-2.5 shadow">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-zinc-100 uppercase tracking-wide flex items-center gap-1.5">
+                          <TrendingUp className="w-3.5 h-3.5 text-accent" /> Timeline Engagement Metrics
+                        </label>
+                        <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700">
+                          {viral.overallScore}/100 ({viral.verdict})
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {viral.metrics.map((m, idx) => (
+                          <div key={idx} className="bg-zinc-950 p-2 rounded border border-zinc-800/80 space-y-0.5">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-medium text-zinc-300">{m.name}</span>
+                              <span className={`font-mono px-1.5 py-0.5 rounded text-[10px] border ${m.color}`}>
+                                {m.score} — {m.label}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-zinc-500">{m.advice}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {viral.tips.length > 0 && (
+                        <div className="bg-zinc-950 border border-zinc-800 rounded p-2 text-[10px] text-zinc-400 space-y-1">
+                          {viral.tips.map((tip, idx) => (
+                            <div key={idx} className="flex items-start gap-1.5">
+                              <span className="text-accent font-mono">•</span>
+                              <span>{tip}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3.5 space-y-2">
                   <label className="block text-xs font-semibold text-zinc-100 uppercase tracking-wide flex items-center gap-1.5">
                     <Zap className="w-3.5 h-3.5 text-zinc-400" /> Broadcast Slates & Elements
@@ -1531,6 +1640,53 @@ export default function Editor() {
               </>
             )}
 
+            {/* ── Templates Panel ── */}
+            {activePanel === "templates" && (
+              <div className="space-y-2.5">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+                  <h3 className="text-xs font-bold text-zinc-100 mb-0.5">Production Presets</h3>
+                  <p className="text-[10px] text-zinc-400">
+                    One-click timeline layouts with pre-configured color grading and layer structures.
+                  </p>
+                </div>
+
+                <div className="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+                  {STUDIO_TEMPLATES.map(tmpl => (
+                    <div key={tmpl.id} className="border border-zinc-800/80 rounded-lg p-2.5 bg-zinc-900/60 hover:bg-zinc-900 transition-colors space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-zinc-200">{tmpl.name}</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-950 text-zinc-300 border border-zinc-800">
+                          {tmpl.aspectRatio}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-zinc-500 leading-normal">{tmpl.description}</p>
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[9px] text-zinc-600 font-mono uppercase">{tmpl.category}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[11px] font-medium bg-zinc-950 hover:bg-zinc-800 border-zinc-700 text-zinc-200"
+                          onClick={() => {
+                            pushHistory(captureSnapshot());
+                            const newLayers = tmpl.getLayers();
+                            const newOverlays = tmpl.getTextOverlays();
+                            setLayers(prev => [...prev, ...newLayers]);
+                            setTextOverlays(prev => [...prev, ...newOverlays]);
+                            setColorGrade(tmpl.colorGrade);
+                            setEffects(tmpl.videoEffects);
+                            if (newLayers.length > 0) setSelectedLayerId(newLayers[0].id);
+                            toast.success(`Applied preset: ${tmpl.name}`);
+                          }}
+                        >
+                          Apply Preset
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* ── Text Panel ── */}
             {activePanel === "text" && (
               <>
@@ -1580,6 +1736,9 @@ export default function Editor() {
                 onEffectsChange={setEffects}
                 activeTab={audioEffectsTab}
                 onTabChange={setAudioEffectsTab}
+                duckingEnabled={duckingEnabled}
+                onToggleDucking={setDuckingEnabled}
+                onExtractAudio={handleExtractAudio}
               />
             )}
 

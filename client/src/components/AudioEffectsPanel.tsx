@@ -22,6 +22,9 @@ interface AudioEffectsPanelProps {
   onEffectsChange: (effects: EffectSettings) => void;
   activeTab: "audio" | "effects";
   onTabChange: (tab: "audio" | "effects") => void;
+  duckingEnabled?: boolean;
+  onToggleDucking?: (enabled: boolean) => void;
+  onExtractAudio?: () => void;
 }
 
 export function AudioEffectsPanel({
@@ -34,6 +37,9 @@ export function AudioEffectsPanel({
   onEffectsChange,
   activeTab,
   onTabChange,
+  duckingEnabled,
+  onToggleDucking,
+  onExtractAudio,
 }: AudioEffectsPanelProps) {
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
 
@@ -115,6 +121,32 @@ export function AudioEffectsPanel({
                   className="hidden"
                 />
               </label>
+            </div>
+
+            {/* Studio Audio Tools */}
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-lg p-3 space-y-2.5 shadow">
+              <label className="text-xs font-bold text-zinc-100 uppercase tracking-wide flex items-center gap-1.5">
+                <Volume2 className="w-3.5 h-3.5 text-green-400" /> Studio Audio Tools
+              </label>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-zinc-300">Smart Ducking (-40% on speech)</span>
+                <input
+                  type="checkbox"
+                  checked={duckingEnabled ?? false}
+                  onChange={e => onToggleDucking?.(e.target.checked)}
+                  className="rounded bg-zinc-800 border-zinc-700 text-green-500 focus:ring-green-500 h-4 w-4 cursor-pointer"
+                />
+              </div>
+              {onExtractAudio && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onExtractAudio}
+                  className="w-full h-7 text-xs bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-200 gap-1.5"
+                >
+                  <Volume2 className="w-3.5 h-3.5 text-blue-400" /> Extract Audio from Video
+                </Button>
+              )}
             </div>
 
             {/* Audio Tracks List */}

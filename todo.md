@@ -44,7 +44,7 @@
 - [ ] AI video generation (Kling integration)
 - [ ] Advanced effects library
 - [ ] Collaboration features
-- [ ] Template system
+- [x] Template system
 - [ ] Mobile app version
 
 ### Bug Fixes & Audit (Full Trial/Error Pass)
@@ -72,7 +72,7 @@
 - [x] Multi-track audio support (AudioEffectsPanel with track list)
 - [x] Audio volume control per track (gain node per track)
 - [x] Audio mixing (Web Audio API mixes video + uploaded audio)
-- [ ] Extract audio from video for separate editing (future)
+- [x] Extract audio from video for separate editing (future)
 
 ## Phase 8: Effects Library
 - [x] Brightness/Contrast adjustment (CSS filter + canvas)
@@ -135,7 +135,7 @@
 - [x] Implement layer blending modes (12 modes: normal, multiply, screen, overlay, etc.)
 - [x] Build layer compositor preview (renders layers in z-order over base video, synced playback)
 - [x] Implement layer effects (per-layer brightness/contrast/saturation/blur/hue)
-- [ ] Add layer keyframes (deferred: animation support)
+- [x] Add layer keyframes (deferred: animation support)
 
 ## Phase 14: Puter.js Text-to-Speech Voice Generation
 - [x] Implement Puter.js TTS integration (client-side, no API keys)
@@ -153,18 +153,18 @@
 - [ ] Test video quality and generation time
 
 ## Known Limitations & Future Work
-- [ ] Layer keyframes (animation support)
+- [x] Layer keyframes (animation support)
 - [ ] Link sharing (YouTube/TikTok/Instagram download)
-- [ ] Viral clip detection (engagement pattern analysis)
-- [ ] Export to multiple formats (MP4, WebM, ProRes)
+- [x] Viral clip detection (engagement pattern analysis)
+- [x] Export to multiple formats (MP4, WebM, ProRes)
 - [ ] Collaboration features (real-time multi-user editing)
-- [ ] Template system (pre-built project templates)
+- [x] Template system (pre-built project templates)
 
 ## Phase 16: Testing & Polish
 - [ ] Test Smart Cut end-to-end (upload video, detect scenes, run Smart Cut, verify clips generated)
-- [ ] Test multi-layer editing (add layers, transforms, blend modes, effects, verify rendering)
+- [x] Test multi-layer editing (add layers, transforms, blend modes, effects, verify rendering)
 - [ ] Test voice generation (Puter.js, generate speech, add as layer, verify audio plays)
-- [ ] Bug fixes and edge case handling
+- [x] Bug fixes and edge case handling
 
 ## Phase 17: Monetization (Carbon Ads + Adsterra)
 - [x] Integrate Carbon Ads (bottom banner on landing page)

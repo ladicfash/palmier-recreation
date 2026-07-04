@@ -11,6 +11,29 @@ export type LayerType = "video" | "audio" | "text" | "image" | "shape" | "sticke
 export type ShapeType = "rectangle" | "circle" | "lower-third" | "badge" | "frame";
 export type StickerType = "subscribe" | "live" | "fire" | "breaking" | "like" | "glitch" | "arrow";
 
+export type ContinuousAnimationType =
+  | "none"
+  | "ken-burns-in"
+  | "ken-burns-out"
+  | "float"
+  | "pulse"
+  | "spin"
+  | "shake"
+  | "neon-pulse"
+  | "wave";
+
+export const CONTINUOUS_ANIMATION_OPTIONS: { id: ContinuousAnimationType; label: string }[] = [
+  { id: "none", label: "None (Static)" },
+  { id: "ken-burns-in", label: "Ken Burns Zoom In" },
+  { id: "ken-burns-out", label: "Ken Burns Zoom Out" },
+  { id: "float", label: "Hover / Floating" },
+  { id: "pulse", label: "Heartbeat Pulse" },
+  { id: "spin", label: "Continuous Rotation" },
+  { id: "shake", label: "Dynamic Vibrate / Shake" },
+  { id: "neon-pulse", label: "Neon Glow Pulse" },
+  { id: "wave", label: "Wave Oscillation" },
+];
+
 export type BlendMode =
   | "normal"
   | "multiply"
@@ -74,6 +97,7 @@ export interface Layer {
   stickerType?: StickerType;
   animationIn?: "fade" | "pop" | "slide-left" | "slide-right" | "zoom" | "none";
   animationOut?: "fade" | "shrink" | "slide-down" | "none";
+  animationContinuous?: ContinuousAnimationType;
 }
 
 export const DEFAULT_TRANSFORM: LayerTransform = {
@@ -116,11 +140,73 @@ export function createLayer(type: LayerType, partial: Partial<Layer> = {}): Laye
     stickerType: "subscribe",
     animationIn: "pop",
     animationOut: "fade",
+    animationContinuous: "none",
     ...partial,
     // Ensure nested objects are not overwritten with partials that lose keys
     ...(partial.transform ? { transform: { ...DEFAULT_TRANSFORM, ...partial.transform } } : {}),
     ...(partial.effects ? { effects: { ...DEFAULT_EFFECTS, ...partial.effects } } : {}),
   };
+}
+
+export interface ContinuousAnimationResult {
+  scaleMultiplier: number;
+  rotationOffset: number;
+  translateXOffset: number;
+  translateYOffset: number;
+  filterAddon: string;
+}
+
+export function getContinuousAnimationTransform(
+  layer: Layer,
+  currentTime: number
+): ContinuousAnimationResult {
+  const result: ContinuousAnimationResult = {
+    scaleMultiplier: 1,
+    rotationOffset: 0,
+    translateXOffset: 0,
+    translateYOffset: 0,
+    filterAddon: "",
+  };
+
+  if (!layer.animationContinuous || layer.animationContinuous === "none") {
+    return result;
+  }
+
+  const elapsed = Math.max(0, currentTime - layer.startTime);
+  const duration = Math.max(0.1, layer.endTime - layer.startTime);
+  const progress = Math.min(1, elapsed / duration);
+
+  switch (layer.animationContinuous) {
+    case "ken-burns-in":
+      result.scaleMultiplier = 1.0 + progress * 0.25; // 100% to 125%
+      break;
+    case "ken-burns-out":
+      result.scaleMultiplier = 1.25 - progress * 0.25; // 125% to 100%
+      break;
+    case "float":
+      result.translateYOffset = Math.sin(elapsed * 2.5) * 15; // float up and down 15px
+      break;
+    case "pulse":
+      result.scaleMultiplier = 1.0 + Math.sin(elapsed * 4) * 0.08;
+      break;
+    case "spin":
+      result.rotationOffset = (elapsed * 45) % 360; // 45 deg per second
+      break;
+    case "shake":
+      result.translateXOffset = Math.sin(elapsed * 20) * 8;
+      result.translateYOffset = Math.cos(elapsed * 25) * 6;
+      break;
+    case "neon-pulse":
+      const glow = Math.abs(Math.sin(elapsed * 3)) * 20 + 5;
+      result.filterAddon = `drop-shadow(0 0 ${glow}px var(--accent, #10b981))`;
+      break;
+    case "wave":
+      result.translateXOffset = Math.sin(elapsed * 3) * 20;
+      result.rotationOffset = Math.cos(elapsed * 3) * 5;
+      break;
+  }
+
+  return result;
 }
 
 /** Build the CSS filter string for a layer's effects */

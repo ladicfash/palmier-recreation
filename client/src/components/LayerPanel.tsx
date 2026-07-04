@@ -9,7 +9,7 @@ import {
   Video, Music, Type as TypeIcon, Image as ImageIcon, Plus, VolumeX, Volume2,
   Sparkles, Shapes, Smile, PlayCircle, StopCircle
 } from "lucide-react";
-import { Layer, LayerType, BlendMode, BLEND_MODES, ShapeType, StickerType } from "@/lib/layers";
+import { Layer, LayerType, BlendMode, BLEND_MODES, ShapeType, StickerType, CONTINUOUS_ANIMATION_OPTIONS } from "@/lib/layers";
 
 interface LayerPanelProps {
   layers: Layer[];
@@ -297,6 +297,22 @@ export default function LayerPanel({
                 <option value="none">None</option>
               </select>
             </div>
+          </div>
+
+          {/* Continuous Motion Graphics */}
+          <div className="border-t border-border/60 pt-2">
+            <span className="text-[10px] text-muted-foreground block mb-1 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-yellow-400" /> Motion Graphics / Continuous Anim
+            </span>
+            <select
+              value={selected.animationContinuous ?? "none"}
+              onChange={e => onUpdateLayer(selected.id, { animationContinuous: e.target.value as any })}
+              className="w-full h-7 px-2 rounded bg-background border border-border text-[11px] text-zinc-200"
+            >
+              {CONTINUOUS_ANIMATION_OPTIONS.map(opt => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
           </div>
 
           {/* Timing */}

@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import { Layer, layerEffectsToCSSFilter, isLayerActiveAt } from "@/lib/layers";
+import { Layer, layerEffectsToCSSFilter, isLayerActiveAt, getContinuousAnimationTransform } from "@/lib/layers";
 
 interface LayerCompositorProps {
   layers: Layer[];
@@ -208,17 +208,24 @@ export default function LayerCompositor({
           else if (layer.animationOut === "slide-down") translateY = 50 * (1 - progress);
         }
 
-        const finalScale = (safeScale / 100) * transitionScale;
+        const cont = getContinuousAnimationTransform(layer, currentTime);
+        const finalScale = (safeScale / 100) * transitionScale * cont.scaleMultiplier;
         const finalOpacity = safeOpacity * transitionOpacity;
+        const finalRot = safeRot + cont.rotationOffset;
+        const finalTranslateX = translateX + cont.translateXOffset;
+        const finalTranslateY = translateY + cont.translateYOffset;
+
+        const baseFilter = layerEffectsToCSSFilter(layer.effects);
+        const combinedFilter = [baseFilter !== "none" ? baseFilter : "", cont.filterAddon].filter(Boolean).join(" ") || "none";
 
         const style: React.CSSProperties = {
           position: "absolute",
           left: `${safeX}%`,
           top: `${safeY}%`,
-          transform: `translate(calc(-50% + ${translateX}px), calc(-50% + ${translateY}px)) scale(${finalScale}) rotate(${safeRot}deg)`,
+          transform: `translate(calc(-50% + ${finalTranslateX}px), calc(-50% + ${finalTranslateY}px)) scale(${finalScale}) rotate(${finalRot}deg)`,
           opacity: finalOpacity,
           mixBlendMode: layer.blendMode as React.CSSProperties["mixBlendMode"],
-          filter: layerEffectsToCSSFilter(layer.effects),
+          filter: combinedFilter,
           pointerEvents: onSelectLayer ? "auto" : "none",
           cursor: onSelectLayer ? "pointer" : undefined,
           maxWidth: "90%",
