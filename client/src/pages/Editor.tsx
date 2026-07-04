@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import EditorAdBanner from "@/components/EditorAdBanner";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { TimelineEditor } from "@/components/TimelineEditor";
@@ -1062,6 +1063,7 @@ export default function Editor() {
 
   return (
     <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden">
+      <EditorAdBanner />
       {/* ── Header ── */}
       <header className="flex-shrink-0 h-12 bg-card border-b border-border flex items-center px-4 gap-3">
         <Link href="/" className="flex items-center gap-2 mr-2">

@@ -8,6 +8,7 @@ import {
 import { useState } from "react";
 import { Link } from "wouter";
 import AdBanner from "@/components/AdBanner";
+import DismissibleAdPopup from "@/components/DismissibleAdPopup";
 
 const faqs = [
   {
@@ -50,6 +51,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <DismissibleAdPopup />
       {/* Adsterra Top Banner */}
       <AdBanner type="adsterra" position="top" />
 
@@ -57,7 +59,7 @@ export default function Home() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-accent rounded-md flex items-center justify-center text-accent-foreground font-bold text-sm">P</div>
+            <img src="/manus-storage/pixelcraft-logo_fb926e8a.png" alt="PixelCraft" className="w-8 h-8" />
             <span className="font-bold text-base tracking-tight">PixelCraft</span>
           </div>
 
