@@ -34,6 +34,8 @@ function VideoLayerEl({ layer, currentTime, isPlaying }: { layer: Layer; current
     const localTime = currentTime - layer.startTime;
     if (localTime >= 0 && Math.abs(el.currentTime - localTime) > 0.35) {
       el.currentTime = localTime;
+    } else if (localTime < 0 && el.currentTime !== 0) {
+      el.currentTime = 0;
     }
   }, [currentTime, layer.startTime]);
 
@@ -67,6 +69,8 @@ function AudioLayerEl({ layer, currentTime, isPlaying }: { layer: Layer; current
     const localTime = currentTime - layer.startTime;
     if (localTime >= 0 && Math.abs(el.currentTime - localTime) > 0.35) {
       el.currentTime = localTime;
+    } else if (localTime < 0 && el.currentTime !== 0) {
+      el.currentTime = 0;
     }
   }, [currentTime, layer.startTime]);
 
@@ -171,7 +175,12 @@ export default function LayerCompositor({
         }
         if (!active) return null;
 
-        const t = layer.transform;
+        const t = layer.transform || { x: 50, y: 50, scale: 100, rotation: 0, opacity: 1 };
+        const safeScale = typeof t.scale === "number" ? t.scale : 100;
+        const safeOpacity = typeof t.opacity === "number" ? t.opacity : 1;
+        const safeX = typeof t.x === "number" ? t.x : 50;
+        const safeY = typeof t.y === "number" ? t.y : 50;
+        const safeRot = typeof t.rotation === "number" ? t.rotation : 0;
         
         // Calculate entrance/exit transitions
         const elapsed = currentTime - layer.startTime;
@@ -199,14 +208,14 @@ export default function LayerCompositor({
           else if (layer.animationOut === "slide-down") translateY = 50 * (1 - progress);
         }
 
-        const finalScale = (t.scale / 100) * transitionScale;
-        const finalOpacity = t.opacity * transitionOpacity;
+        const finalScale = (safeScale / 100) * transitionScale;
+        const finalOpacity = safeOpacity * transitionOpacity;
 
         const style: React.CSSProperties = {
           position: "absolute",
-          left: `${t.x}%`,
-          top: `${t.y}%`,
-          transform: `translate(calc(-50% + ${translateX}px), calc(-50% + ${translateY}px)) scale(${finalScale}) rotate(${t.rotation}deg)`,
+          left: `${safeX}%`,
+          top: `${safeY}%`,
+          transform: `translate(calc(-50% + ${translateX}px), calc(-50% + ${translateY}px)) scale(${finalScale}) rotate(${safeRot}deg)`,
           opacity: finalOpacity,
           mixBlendMode: layer.blendMode as React.CSSProperties["mixBlendMode"],
           filter: layerEffectsToCSSFilter(layer.effects),

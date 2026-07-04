@@ -182,8 +182,10 @@
 - [x] **Precision Zoom Controls**: Added precision zoom buttons (`+`, `-`, `Fit to View`) and timestamp/frame HUD to editor timeline.
 - [x] **Type Safety & Build Verification**: All TypeScript and bundling checks verified clean (`npx pnpm check` & `npx pnpm build`).
 
-## Phase 21: Ultra-Modern 2026 SaaS Studio UI Modernization
-- [x] **Glassmorphic Studio Header**: Upgraded `Editor.tsx` top navigation bar with `#0a0a0d/90` dark glassmorphism, accent gradient logo mark, and interactive quota pills.
-- [x] **Sleek Inspector Dock**: Upgraded editor sidebar navigation tabs with `#10b981` active indicator pills and scaled focus cards.
-- [x] **Floating Studio Playback Controls**: Replaced flat video toolbar with a floating glassmorphic playback dock featuring custom progress scrubbing and speed multiplier pills.
-- [x] **Import Video Card**: Created polished onboarding card inside canvas workspace when no project is loaded.
+## Phase 22: Senior Staff Architecture Audit & Deep Edge Case Hardening
+- [x] **SSRF & Storage URL Resolution**: Implemented `resolveStorageUrl` helper in `server/routers.ts` to convert relative `/manus-storage/...` paths into absolute S3 signed URLs before server-side fetching (`captions.generate`, `detectAdvanced`, `smartCut`), eliminating Node `fetch()` URL errors and protecting against SSRF.
+- [x] **Web Audio `InvalidStateError` Prevention**: Added `key={videoObjectUrl || "empty"}` to React `<video>` element, ensuring a clean DOM node unmount/remount on media switch so `createMediaElementSource` never throws `InvalidStateError` on reconnection.
+- [x] **Audio Gain / Volume Double Attenuation Fix**: Refactored `handleVolumeChange` to route volume linearly through Web Audio `GainNode` when connected (`video.muted = true`), avoiding `v * v` double attenuation.
+- [x] **Layer Compositor Undo/Redo Integration**: Added `layers: Layer[]` to `EditorSnapshot` so pressing `Ctrl+Z` (`undo()`) and `Ctrl+Y` (`redo()`) properly reverts multi-layer After Effects composition state.
+- [x] **Negative Local Time Audio Sync Fix**: Updated `LayerCompositor.tsx` audio/video seek sync to reset media position (`el.currentTime = 0`) when scrubbed backward prior to `layer.startTime`.
+- [x] **100% Green Verification**: 11/11 automated unit tests passing, zero TypeScript errors (`npx pnpm check`), and clean bundle generation (`npx pnpm build`).

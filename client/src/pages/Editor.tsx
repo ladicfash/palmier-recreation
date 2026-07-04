@@ -76,6 +76,7 @@ interface EditorSnapshot {
   textOverlays: TextOverlay[];
   scenes: SceneMarker[];
   captions: Caption[];
+  layers: Layer[];
   trimStart: number;
   trimEnd: number;
   speed: number;
@@ -332,8 +333,8 @@ export default function Editor() {
   // ─── Undo/Redo ─────────────────────────────────────────────────────────────
   const captureSnapshot = useCallback((): EditorSnapshot => ({
     clips: [...clips], textOverlays: [...textOverlays], scenes: [...scenes],
-    captions: [...captions], trimStart, trimEnd, speed, opacity,
-  }), [clips, textOverlays, scenes, captions, trimStart, trimEnd, speed, opacity]);
+    captions: [...captions], layers: [...layers], trimStart, trimEnd, speed, opacity,
+  }), [clips, textOverlays, scenes, captions, layers, trimStart, trimEnd, speed, opacity]);
 
   const pushHistory = useCallback((snapshot: EditorSnapshot) => {
     const history = historyRef.current;
@@ -352,7 +353,7 @@ export default function Editor() {
     historyIndexRef.current = idx - 1;
     const snap = historyRef.current[historyIndexRef.current]!;
     setClips(snap.clips); setTextOverlays(snap.textOverlays); setScenes(snap.scenes);
-    setCaptions(snap.captions); setTrimStart(snap.trimStart); setTrimEnd(snap.trimEnd);
+    setCaptions(snap.captions); if (snap.layers) setLayers(snap.layers); setTrimStart(snap.trimStart); setTrimEnd(snap.trimEnd);
     setSpeed(snap.speed); setOpacity(snap.opacity);
     if (videoRef.current) videoRef.current.playbackRate = snap.speed;
     setCanUndo(historyIndexRef.current > 0); setCanRedo(true);
@@ -365,7 +366,7 @@ export default function Editor() {
     historyIndexRef.current = idx + 1;
     const snap = historyRef.current[historyIndexRef.current]!;
     setClips(snap.clips); setTextOverlays(snap.textOverlays); setScenes(snap.scenes);
-    setCaptions(snap.captions); setTrimStart(snap.trimStart); setTrimEnd(snap.trimEnd);
+    setCaptions(snap.captions); if (snap.layers) setLayers(snap.layers); setTrimStart(snap.trimStart); setTrimEnd(snap.trimEnd);
     setSpeed(snap.speed); setOpacity(snap.opacity);
     if (videoRef.current) videoRef.current.playbackRate = snap.speed;
     setCanUndo(true); setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
@@ -476,8 +477,12 @@ export default function Editor() {
   const handleVolumeChange = useCallback((val: number) => {
     const v = Math.max(0, Math.min(1, val));
     setVolume(v); setIsMuted(v === 0);
-    if (videoRef.current) { videoRef.current.volume = v; videoRef.current.muted = v === 0; }
-    if (audioGainRef.current) audioGainRef.current.gain.value = v;
+    if (audioGainRef.current) {
+      audioGainRef.current.gain.value = v;
+      if (videoRef.current) { videoRef.current.muted = v === 0; }
+    } else if (videoRef.current) {
+      videoRef.current.volume = v; videoRef.current.muted = v === 0;
+    }
   }, []);
 
   // ─── Editing Controls ──────────────────────────────────────────────────────
@@ -1201,8 +1206,10 @@ export default function Editor() {
             ) : (
               <>
                 <video
+                  key={videoObjectUrl || "empty"}
                   ref={videoRef}
                   src={videoObjectUrl}
+                  crossOrigin="anonymous"
                   className="max-w-full max-h-full object-contain"
                   style={{ opacity, filter: (() => { const ef = getEffectsCSSFilter(effects); const cg = gradeToCSS(colorGrade); const parts = [ef === 'none' ? '' : ef, cg].filter(Boolean); return parts.length ? parts.join(' ') : undefined; })() }}
                   onLoadedMetadata={handleLoadedMetadata}

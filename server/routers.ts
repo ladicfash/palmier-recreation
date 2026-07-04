@@ -10,8 +10,20 @@ import { execSync } from "child_process";
 import { join } from "path";
 import { tmpdir } from "os";
 import { writeFileSync, unlinkSync, existsSync } from "fs";
-import { storagePut } from "./storage";
+import { storagePut, storageGetSignedUrl } from "./storage";
 import { invokeLLM } from "./_core/llm";
+
+async function resolveStorageUrl(url: string): Promise<string> {
+  if (url.startsWith("/manus-storage/")) {
+    const key = url.replace(/^\/manus-storage\//, "");
+    try {
+      return await storageGetSignedUrl(key);
+    } catch {
+      return `http://127.0.0.1:${process.env.PORT || 3000}${url}`;
+    }
+  }
+  return url;
+}
 import { generateSpeech, getAvailableVoices } from "./voice_generation";
 
 export const appRouter = router({
@@ -160,8 +172,8 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         try {
-          // Fetch the audio from S3 storage URL (server-accessible)
-          const audioResponse = await fetch(input.audioUrl);
+          const resolvedAudioUrl = await resolveStorageUrl(input.audioUrl);
+          const audioResponse = await fetch(resolvedAudioUrl);
           if (!audioResponse.ok) {
             throw new Error(`Failed to fetch audio from storage: ${audioResponse.status}`);
           }
@@ -169,7 +181,7 @@ export const appRouter = router({
           const audioBlob = new Blob([audioBuffer], { type: "audio/webm" });
 
           const result = await transcribeAudio({
-            audioUrl: input.audioUrl,
+            audioUrl: resolvedAudioUrl,
             language: input.language,
           });
 
@@ -308,8 +320,8 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const tmpPath = join(tmpdir(), `pixelcraft_${ctx.user.id}_${Date.now()}.mp4`);
         try {
-          // Download video from S3 to temp file
-          const response = await fetch(input.videoUrl);
+          const resolvedVideoUrl = await resolveStorageUrl(input.videoUrl);
+          const response = await fetch(resolvedVideoUrl);
           if (!response.ok) throw new Error(`Failed to download video: ${response.statusText}`);
           const buffer = Buffer.from(await response.arrayBuffer());
           writeFileSync(tmpPath, buffer);
@@ -359,7 +371,8 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const tmpPath = join(tmpdir(), `pixelcraft_smart_${ctx.user.id}_${Date.now()}.mp4`);
         try {
-          const response = await fetch(input.videoUrl);
+          const resolvedVideoUrl = await resolveStorageUrl(input.videoUrl);
+          const response = await fetch(resolvedVideoUrl);
           if (!response.ok) throw new Error(`Failed to download video: ${response.statusText}`);
           const buffer = Buffer.from(await response.arrayBuffer());
           writeFileSync(tmpPath, buffer);

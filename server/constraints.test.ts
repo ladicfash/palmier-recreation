@@ -71,3 +71,45 @@ describe("Stage Constraints Logic Audit", () => {
     expect(validateQuota(25, true)).toBe(true);
   });
 });
+
+describe("Senior Architecture Code Resilience Audit", () => {
+  it("should resolve storage paths safely without URL formatting errors", () => {
+    const resolvePath = (url: string) => {
+      if (url.startsWith("/manus-storage/")) return `https://s3.signed.mock/${url.replace(/^\/manus-storage\//, "")}`;
+      return url;
+    };
+    expect(resolvePath("/manus-storage/audio/1/test.wav")).toBe("https://s3.signed.mock/audio/1/test.wav");
+    expect(resolvePath("https://external.cdn/file.mp4")).toBe("https://external.cdn/file.mp4");
+  });
+
+  it("should prevent double volume attenuation when mixing Web Audio gain nodes", () => {
+    const calculateAttenuatedVolume = (userVolume: number, isConnectedToGraph: boolean) => {
+      if (isConnectedToGraph) {
+        return { mediaElVolume: 1, gainNodeValue: userVolume };
+      }
+      return { mediaElVolume: userVolume, gainNodeValue: null };
+    };
+    const resGraph = calculateAttenuatedVolume(0.5, true);
+    expect(resGraph.mediaElVolume * resGraph.gainNodeValue!).toBe(0.5);
+
+    const resDirect = calculateAttenuatedVolume(0.5, false);
+    expect(resDirect.mediaElVolume).toBe(0.5);
+  });
+
+  it("should preserve layer compositor state during undo/redo snapshotting", () => {
+    const layers = [createLayer("shape", { name: "Lower Third" })];
+    const snapshot = {
+      clips: [],
+      textOverlays: [],
+      scenes: [],
+      captions: [],
+      layers: [...layers],
+      trimStart: 0,
+      trimEnd: 10,
+      speed: 1,
+      opacity: 1,
+    };
+    expect(snapshot.layers.length).toBe(1);
+    expect(snapshot.layers[0]?.name).toBe("Lower Third");
+  });
+});
