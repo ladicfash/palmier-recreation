@@ -159,3 +159,16 @@
 - [ ] Export to multiple formats (MP4, WebM, ProRes)
 - [ ] Collaboration features (real-time multi-user editing)
 - [ ] Template system (pre-built project templates)
+
+## Phase 16: Testing & Polish
+- [ ] Test Smart Cut end-to-end (upload video, detect scenes, run Smart Cut, verify clips generated)
+- [ ] Test multi-layer editing (add layers, transforms, blend modes, effects, verify rendering)
+- [ ] Test voice generation (Puter.js, generate speech, add as layer, verify audio plays)
+- [ ] Bug fixes and edge case handling
+
+## Phase 17: Monetization (Carbon Ads + Adsterra)
+- [x] Integrate Carbon Ads (bottom banner on landing page)
+- [x] Integrate Adsterra (top + bottom banners on landing page)
+- [ ] User to provide VITE_CARBON_ADS_ID and VITE_ADSTERRA_ID environment variables
+- [ ] Verify ads display correctly on landing page
+- [ ] Test ad responsiveness on mobile

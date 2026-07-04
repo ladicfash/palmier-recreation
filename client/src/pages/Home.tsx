@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
+import AdBanner from "@/components/AdBanner";
 
 const faqs = [
   {
@@ -49,6 +50,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Adsterra Top Banner */}
+      <AdBanner type="adsterra" position="top" />
+
       {/* ── Header ── */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
@@ -348,6 +352,10 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {/* Carbon Ads + Adsterra Bottom Banner */}
+      <AdBanner type="carbon" position="bottom" />
+      <AdBanner type="adsterra" position="bottom" />
     </div>
   );
 }
